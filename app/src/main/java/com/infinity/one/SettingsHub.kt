@@ -1747,6 +1747,14 @@ private fun AboutPage(ctx: Context) {
                     )
                 }
             }
+            PillButton("Datenschutz", icon = AIcon.Lock, light = true) {
+                runCatching {
+                    ctx.startActivity(
+                        android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://github.com/asheeshsahu7300/infinity-one/blob/dev/PRIVACY.md"))
+                            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                    )
+                }
+            }
         }
     }
 }
