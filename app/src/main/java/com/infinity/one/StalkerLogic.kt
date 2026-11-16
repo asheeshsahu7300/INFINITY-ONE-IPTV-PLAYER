@@ -249,7 +249,8 @@ object StalkerLogic {
 
     /** A movie as two M3U lines. */
     fun movieEntry(src: Source, f: Map<String, String>, category: String): String? {
-        val cmd = f["cmd"]?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        val id = f["id"]?.trim()
+        val cmd = f["cmd"]?.trim()?.takeIf { it.isNotEmpty() } ?: id?.let { "/media/$it.mpg" } ?: return null
         var n = name(f["name"]).ifEmpty { return null }
         val y = f["year"]?.trim()?.takeIf { it.length == 4 && it.all(Char::isDigit) }
         if (y != null && !n.contains("($y)")) n = "$n ($y)"

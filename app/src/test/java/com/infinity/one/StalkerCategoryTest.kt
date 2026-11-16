@@ -105,4 +105,21 @@ class StalkerCategoryTest {
         assertEquals(listOf(other), StalkerLogic.catsFor(all, "KIDS", movies = false, series = true))
         assertEquals(emptyList<StalkerLogic.CatRef>(), StalkerLogic.catsFor(all, "ENGLISH", movies = false, series = false))
     }
+
+    @Test fun stalkerMovieInNonVodGroupIsRecognizedAsMovie() {
+        val src = StalkerLogic.source("http://portal.tld:8080/c/", "00:1A:79:12:34:56")!!
+        val line = StalkerLogic.movieEntry(src, mapOf("id" to "27431", "cmd" to "/media/27431.mpg", "name" to "#Alive", "has_files" to "1"), "ENGLISH | NEW RELEASE")!!
+        val item = M3uParser.parse("#EXTM3U\n$line\n").single()
+        assertEquals(Kind.MOVIE, item.kind)
+        assertEquals("ENGLISH | NEW RELEASE", item.group)
+    }
+
+    @Test fun movieEntryFallsBackToIdWhenCmdMissing() {
+        val src = StalkerLogic.source("http://portal.tld:8080/c/", "00:1A:79:12:34:56")!!
+        val line = StalkerLogic.movieEntry(src, mapOf("id" to "999", "name" to "No Cmd Movie"), "Custom Group")!!
+        val item = M3uParser.parse("#EXTM3U\n$line\n").single()
+        assertEquals(Kind.MOVIE, item.kind)
+        val ref = StalkerLogic.itemRef(item.url)!!
+        assertEquals("/media/999.mpg", ref.cmd)
+    }
 }

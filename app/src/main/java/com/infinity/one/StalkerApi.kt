@@ -326,7 +326,24 @@ object StalkerApi {
             var o: JSONObject? = null
             for (attempt in 0 until 2) {
                 val s = runCatching { login(src, force = attempt > 0) }.getOrNull() ?: break
-                o = js(src, StalkerLogic.api(s.endpoint, type, "get_ordered_list", "$extra&p=$page"), s.token) as? JSONObject
+                val res = js(src, StalkerLogic.api(s.endpoint, type, "get_ordered_list", "$extra&p=$page"), s.token)
+                o = when (res) {
+                    is JSONObject -> res
+                    is JSONArray -> JSONObject().put("data", res)
+                    else -> null
+                }
+                if (page == from && (o?.optJSONArray("data")?.length() ?: 0) == 0 && extra.contains("&sortby=")) {
+                    val fallbackExtra = extra.replace(Regex("""&sortby=[^&]*"""), "")
+                    val altRes = js(src, StalkerLogic.api(s.endpoint, type, "get_ordered_list", "$fallbackExtra&p=$page"), s.token)
+                    val altObj = when (altRes) {
+                        is JSONObject -> altRes
+                        is JSONArray -> JSONObject().put("data", altRes)
+                        else -> null
+                    }
+                    if (altObj != null && (altObj.optJSONArray("data")?.length() ?: 0) > 0) {
+                        o = altObj
+                    }
+                }
                 if (o != null) break
             }
             if (o == null) return Paged(false, total, page - 1, true)
@@ -350,17 +367,49 @@ object StalkerApi {
         private val movies = HashSet<String>()
         private val series = HashSet<String>()
 
+        private fun isSeries(o: JSONObject, type: String, cname: String): Boolean {
+            // Explicit movie indicators from portals that send single media with movie=1 / movies=1 / is_movie=true
+            val isMovie = o.optBoolean("is_movie", false) ||
+                o.optString("is_movie") == "1" ||
+                o.optString("movie") == "1" ||
+                o.optInt("movie", 0) == 1 ||
+                o.optString("movies") == "1" ||
+                o.optInt("movies", 0) == 1
+
+            // Explicit series indicators
+            val isSeries = o.optString("is_series") == "1" ||
+                o.optInt("is_series", 0) == 1 ||
+                o.optBoolean("is_series", false) ||
+                o.optString("series") == "1" ||
+                o.optInt("series", 0) == 1 ||
+                (o.opt("series") is Boolean && o.optBoolean("series")) ||
+                (o.optJSONArray("series")?.length() ?: 0) > 0 ||
+                o.optString("series_id").isNotBlank()
+
+            if (isSeries && !isMovie) return true
+            if (isMovie && !isSeries) return false
+            if (isSeries) return true
+            if (type == "series") return true
+
+            // Category name hint when both movies and series come under single media (type=vod)
+            val lower = cname.lowercase()
+            return lower.contains("series") || lower.contains("tv show") || lower.contains("web series") || lower.contains("tv serial")
+        }
+
         fun video(o: JSONObject, type: String, cid: String, cname: String) {
             val f = fields(o)
-            if (type == "series" || o.optString("is_series") == "1") {
+            if (isSeries(o, type, cname)) {
                 val nm = (f["name"] ?: f["title"] ?: "").trim().lowercase()
                 if (nm.isNotEmpty() && series.add(nm)) {
                     StalkerLogic.seriesEntry(src, f, cid, cname, if (type == "series") "s" else "v")?.let(put)
                     cachePreload(f, true, cname)
                 }
-            } else if (movies.add(f["id"] ?: f["cmd"] ?: return)) {
-                StalkerLogic.movieEntry(src, f, cname)?.let(put)
-                cachePreload(f, false, cname)
+            } else {
+                val movieKey = f["id"] ?: f["cmd"]
+                if (movieKey != null && movies.add(movieKey)) {
+                    StalkerLogic.movieEntry(src, f, cname)?.let(put)
+                    cachePreload(f, false, cname)
+                }
             }
         }
 
@@ -382,7 +431,7 @@ object StalkerApi {
         }
     }
 
-    private fun catExtra(cid: String) = "&category=${enc(cid)}&sortby=added"
+    private fun catExtra(cid: String) = "&category=${enc(cid)}&genre=*&sortby=added"
 
     /** First page of a category. The portal sends the newest first; the app reads "new" from the end of the list: write oldest first. */
     private fun firstPage(src: StalkerLogic.Source, type: String, cid: String, cname: String, check: () -> Unit, em: Emitter): Paged {
