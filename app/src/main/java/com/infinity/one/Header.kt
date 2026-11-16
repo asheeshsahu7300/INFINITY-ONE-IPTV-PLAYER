@@ -257,7 +257,7 @@ private fun ChoiceChip(label: String, selected: Boolean, modifier: Modifier, onC
 }
 
 @Composable
-private fun BellButton(onReminder: (Reminder) -> Unit, onNewEpisode: (String) -> Unit) {
+internal fun BellButton(onReminder: (Reminder) -> Unit, onNewEpisode: (String) -> Unit) {
     var open by remember { mutableStateOf(false) }
     val list = Reminders.list.sortedBy { it.start }
     val news = NewEpisodes.list.toList()
@@ -349,6 +349,6 @@ private fun PlaylistSwitchButton() {
 
 /** Profile: only a circle with a person icon (round 14, without "Hello, name"). */
 @Composable
-private fun ProfileCircle(onClick: () -> Unit) {
+internal fun ProfileCircle(onClick: () -> Unit) {
     RoundHeaderButton(AIcon.Person, Modifier.focusRequester(HeaderFocus.profile), onClick = onClick)
 }

@@ -94,8 +94,9 @@ fun CategoriesScreen(
     val firstFocus = ContentFocus.req
     var inPills by remember { mutableStateOf(false) }
     var inSidebar by remember { mutableStateOf(false) }
-    BackHandler(enabled = !inPills) { runCatching { pillFocus.requestFocus() } }
-    BackHandler(enabled = inPills) { onBack() }
+    val isPhonePortrait = DeviceMode.isPhonePortrait()
+    BackHandler(enabled = isPhonePortrait || inPills) { onBack() }
+    BackHandler(enabled = !isPhonePortrait && !inPills) { runCatching { pillFocus.requestFocus() } }
 
     val map = if (mode == 0) req.infinity else req.provider
     val entries = remember(map, az, saved, CatOrder.version, req.recent, req.watch) {
@@ -118,7 +119,7 @@ fun CategoriesScreen(
             }
             Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(Bg.copy(alpha = .97f), Bg.copy(alpha = .6f)))))
         }
-        Column(Modifier.fillMaxSize().sidebarPad().padding(horizontal = 32.dp, vertical = DS.PageY)) {
+        Column(Modifier.fillMaxSize().sidebarPad(!isPhonePortrait).padding(horizontal = if (isPhonePortrait) 12.dp else 32.dp, vertical = if (isPhonePortrait) 12.dp else DS.PageY)) {
             Text(req.title, color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.ExtraBold)
             Spacer(Modifier.height(10.dp))
             Box(Modifier.onFocusChanged { inPills = it.hasFocus }) {
@@ -164,7 +165,11 @@ fun CategoriesScreen(
                 else TileMode(entries, catSort, firstFocus, onPick)
             }
         }
-        Sidebar(tab, onGoTab, Modifier.align(SidebarPrefs.align()), sideFocus) { inSidebar = it }
+        if (isPhonePortrait) {
+            TwoTabsBar(tab, onGoTab, Modifier.align(Alignment.BottomCenter))
+        } else {
+            Sidebar(tab, onGoTab, Modifier.align(SidebarPrefs.align()), sideFocus) { inSidebar = it }
+        }
     }
 }
 

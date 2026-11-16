@@ -372,21 +372,58 @@ fun HomeScreen(
         HeaderTab("Alle $vodNoun", AIcon.Grid, "tb:all$tab") { onBrowse(BrowseReq("Alle $vodNoun", vodBase, SORT_NEW)) }
     ) + importedTabs.map { (src, l, id) -> HeaderTab(src, AIcon.Download, id) { onBrowse(BrowseReq("$src · $vodNoun", l, SORT_NEW)) } }
     var inHeader by remember { mutableStateOf(false) }
+    val isPhonePortrait = DeviceMode.isPhonePortrait()
     val header: @Composable (Modifier) -> Unit = { m ->
-        HeaderBar(
-            m.onFocusChanged { inHeader = it.hasFocus },
-            onSearch = { onTab(4) },
-            onReminder = { r -> byId[r.chId]?.let(onOpen) },
-            onNewEpisode = { id -> byId[id]?.let(onOpen) },
-            // Only one profile: go directly to the profile page of settings (before: general settings)
-            onProfile = { if (Profiles.list.size > 1) picker = true else { SettingsNav.openPage = SettingsNav.PROFILES; onTab(MenuLogic.SETTINGS) } },
-            tabs = navTabs,
-            areaTab = tab,
-            // Round 20: the View button is gone (now in Settings > View), only bell and profile at the top right
-            showView = false,
-            // Without a big picture (no title images yet): the first tab is the target from the sidebar
-            firstIsContent = isVod && ready.isEmpty()
-        )
+        if (isPhonePortrait) {
+            val title = when (tab) {
+                0 -> "For You"
+                1 -> "Filme"
+                2 -> "Serien"
+                3 -> "Live TV"
+                7 -> "Favoriten"
+                8 -> "My Space"
+                4 -> "Suche"
+                5 -> "Einstellungen"
+                else -> "Infinity"
+            }
+            Row(
+                m.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = title,
+                    color = Color.White,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    BellButton(
+                        onReminder = { r -> byId[r.chId]?.let(onOpen) },
+                        onNewEpisode = { id -> byId[id]?.let(onOpen) }
+                    )
+                    ProfileCircle(onClick = { if (Profiles.list.size > 1) picker = true else { SettingsNav.openPage = SettingsNav.PROFILES; onTab(MenuLogic.SETTINGS) } })
+                }
+            }
+        } else {
+            HeaderBar(
+                m.onFocusChanged { inHeader = it.hasFocus },
+                onSearch = { onTab(4) },
+                onReminder = { r -> byId[r.chId]?.let(onOpen) },
+                onNewEpisode = { id -> byId[id]?.let(onOpen) },
+                // Only one profile: go directly to the profile page of settings (before: general settings)
+                onProfile = { if (Profiles.list.size > 1) picker = true else { SettingsNav.openPage = SettingsNav.PROFILES; onTab(MenuLogic.SETTINGS) } },
+                tabs = navTabs,
+                areaTab = tab,
+                // Round 20: the View button is gone (now in Settings > View), only bell and profile at the top right
+                showView = false,
+                // Without a big picture (no title images yet): the first tab is the target from the sidebar
+                firstIsContent = isVod && ready.isEmpty()
+            )
+        }
     }
     // Tiles with real images from the own library (round 15): scene image of a top title per area,
     // for favorites and My list a title from it, for Live TV the logos of favorite channels.
@@ -566,10 +603,10 @@ fun HomeScreen(
     val bbA: () -> Float = remember(bbAnim) { { bbAnim.value } }
     val pivotSpec = remember(tab) { PivotSpec(0.52f) { states[tab.coerceIn(0, states.lastIndex)] } }
     Box(Modifier.fillMaxSize()) {
-        if (bbTab) BillboardLayer(bbA, bbItemState, Modifier.padding(start = SideStart + dpx(56), top = dpx(64) + (if (SidebarPrefs.pos == SidebarPrefs.TOP) TopBarH else 0.dp)))
-        BoxWithConstraints(Modifier.fillMaxSize().sidebarPad()) {
+        if (bbTab && !isPhonePortrait) BillboardLayer(bbA, bbItemState, Modifier.padding(start = SideStart + dpx(56), top = dpx(64) + (if (SidebarPrefs.pos == SidebarPrefs.TOP) TopBarH else 0.dp)))
+        BoxWithConstraints(Modifier.fillMaxSize().sidebarPad(!isPhonePortrait)) {
             // Card widths and height of the big picture from the available space (as in the design: everything at a glance)
-            val grid = remember(maxWidth, Design.k, General.cardSize) { cardGrid(maxWidth - RowPadX * 2) }
+            val grid = remember(maxWidth, Design.k, General.cardSize, isPhonePortrait) { cardGrid(maxWidth - RowPadX * 2, isMobile = isPhonePortrait) }
             // Design: big picture 420 px high (start), 345 px (movies/series)
             val heroH = dpx(if (tab == 0) 540 else 450)
             val keepSettings = AddFlowLogic.keepsSettingsPage(tab, PlaylistStore.lists.isNotEmpty())
@@ -626,7 +663,7 @@ fun HomeScreen(
                         if (ct > 1f) clipRect(top = ct) { this@drawWithContent.drawContent() } else drawContent()
                     },
                     state = states[tab],
-                    contentPadding = PaddingValues(bottom = dpx(300))
+                    contentPadding = PaddingValues(bottom = if (isPhonePortrait) 120.dp else dpx(300))
                 ) {
                     when (tab) {
                         0 -> {
@@ -637,7 +674,16 @@ fun HomeScreen(
                                     Text("Bearbeiten: Über jeder Reihe kannst du sie verschieben oder ausblenden.", color = Muted, fontSize = 15.sp)
                                 }
                             }
-                            if (ready.isNotEmpty() && HomeLayout.shown("hero")) item(key = "hero") { Hero(ready.toList(), heroH, true, onOpen, onPlayNow, header, { heroScroll(states[0]) }) { scope.launch { states[0].animateScrollToItem(0) } } }
+                            if (ready.isNotEmpty() && HomeLayout.shown("hero")) item(key = "hero") {
+                                if (isPhonePortrait) {
+                                    Column {
+                                        header(Modifier)
+                                        MobileHeroCard(ready.toList(), onOpen, onPlayNow)
+                                    }
+                                } else {
+                                    Hero(ready.toList(), heroH, true, onOpen, onPlayNow, header, { heroScroll(states[0]) }) { scope.launch { states[0].animateScrollToItem(0) } }
+                                }
+                            }
                             else item(key = "top") { header(Modifier) }
                             val wl = wlVod
                             for (blockId in HomeLayout.order) {
@@ -698,7 +744,16 @@ fun HomeScreen(
                             val noun = if (isM) "Filme" else "Serien"
                             val kind = if (isM) Kind.MOVIE else Kind.SERIES
                             val groups = if (isM) movieG else seriesG
-                            if (ready.isNotEmpty()) item(key = "hero$tab") { Hero(ready.toList(), heroH, false, onOpen, onPlayNow, header, { heroScroll(states[tab]) }) { scope.launch { states[tab].animateScrollToItem(0) } } }
+                            if (ready.isNotEmpty()) item(key = "hero$tab") {
+                                if (isPhonePortrait) {
+                                    Column {
+                                        header(Modifier)
+                                        MobileHeroCard(ready.toList(), onOpen, onPlayNow)
+                                    }
+                                } else {
+                                    Hero(ready.toList(), heroH, false, onOpen, onPlayNow, header, { heroScroll(states[tab]) }) { scope.launch { states[tab].animateScrollToItem(0) } }
+                                }
+                            }
                             else item(key = "top$tab") { header(Modifier) }
                             // Popular (trending, otherwise top rated) directly under the big picture. First row:
                             // "Show all" up = profile at the top right, left = "To list" in the picture
@@ -817,11 +872,20 @@ fun HomeScreen(
             BackHandler { picker = false }
             ProfilePicker { id -> picker = false; if (id != Profiles.active) Profiles.switchTo(ctx, id) }
         }
-        Sidebar(
-            tab,
-            { id -> scope.launch { states.getOrNull(id)?.scrollToItem(0) }; onTab(id) },
-            Modifier.align(SidebarPrefs.align()), sideFocus
-        ) { inSidebar = it }
+        if (isPhonePortrait) {
+            TwoTabsBar(
+                currentTab = tab,
+                onSelectTab = { id -> scope.launch { states.getOrNull(id)?.scrollToItem(0) }; onTab(id) },
+                modifier = Modifier.align(Alignment.BottomCenter),
+                showUpper = tab in listOf(0, 1, 2, 3, 7)
+            )
+        } else {
+            Sidebar(
+                tab,
+                { id -> scope.launch { states.getOrNull(id)?.scrollToItem(0) }; onTab(id) },
+                Modifier.align(SidebarPrefs.align()), sideFocus
+            ) { inSidebar = it }
+        }
     }
 }
 

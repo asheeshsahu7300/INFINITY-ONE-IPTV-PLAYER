@@ -187,8 +187,9 @@ var restoreIdx by remember { mutableIntStateOf(state.focused) }
     var inSidebar by remember { mutableStateOf(false) }
     var inFilters by remember { mutableStateOf(false) }
 
-    BackHandler(enabled = inSidebar || inFilters) { onBack() }
-    BackHandler(enabled = !inFilters && !inSidebar) { runCatching { filterFocus.requestFocus() } }
+    val isPhonePortrait = DeviceMode.isPhonePortrait()
+    BackHandler(enabled = isPhonePortrait || inSidebar || inFilters) { onBack() }
+    BackHandler(enabled = !isPhonePortrait && !inFilters && !inSidebar) { runCatching { filterFocus.requestFocus() } }
 
     // Filter choices and result list are computed in the background ("All movies" can have 60,000 titles)
     val facets by produceState(state.lastFacets?.takeIf { it.first == ver }?.second, req, ver) {
@@ -244,7 +245,7 @@ var restoreIdx by remember { mutableIntStateOf(state.focused) }
                 if (e.type == KeyEventType.KeyDown && e.key == Key.Menu) { runCatching { filterFocus.requestFocus() }; true } else false
             }
     ) {
-        Column(Modifier.fillMaxSize().sidebarPad().padding(horizontal = 32.dp, vertical = DS.PageY)) {
+        Column(Modifier.fillMaxSize().sidebarPad(!isPhonePortrait).padding(horizontal = if (isPhonePortrait) 12.dp else 32.dp, vertical = if (isPhonePortrait) 12.dp else DS.PageY)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 Text(req.title, color = Color.White, fontSize = spx(34), fontWeight = FontWeight.ExtraBold, maxLines = 1)
                 Text(if (ready) "${list.size} Titel" else "Lade …", color = Muted, fontSize = 16.sp)
@@ -357,9 +358,12 @@ var restoreIdx by remember { mutableIntStateOf(state.focused) }
                 } else {
                     // Round 15: big covers as on the home screen, on longer highlight the card expands into a scene image with
                     // info (over the neighbors; in the right columns to the left). Column count follows "View" above.
-                    val g = cardGrid(maxWidth, perRow = General.perRow)
+                    val g = cardGrid(maxWidth, perRow = General.perRow, isMobile = isPhonePortrait)
                     val land = General.cardArt == 1
-                    val ncols = if (land) intArrayOf(8, 6, 5)[General.cardSize.coerceIn(0, 2)] else if (General.perRow > 0) General.perRow else intArrayOf(10, 8, 6)[General.cardSize.coerceIn(0, 2)]
+                    val ncols = if (isPhonePortrait) (if (land) 2 else 3)
+                        else if (land) intArrayOf(8, 6, 5)[General.cardSize.coerceIn(0, 2)]
+                        else if (General.perRow > 0) General.perRow
+                        else intArrayOf(10, 8, 6)[General.cardSize.coerceIn(0, 2)]
                     val gap = if (land) g.gap else g.posterGap
                     val cardW = (maxWidth - gap * (ncols - 1)) / ncols
                     Box(Modifier.fillMaxSize()) {
@@ -368,7 +372,7 @@ var restoreIdx by remember { mutableIntStateOf(state.focused) }
                         state = gridState,
                         horizontalArrangement = Arrangement.spacedBy(gap),
                         verticalArrangement = Arrangement.spacedBy(dpx(18)),
-                        contentPadding = PaddingValues(top = dpx(14), bottom = dpx(60)),
+                        contentPadding = PaddingValues(top = dpx(14), bottom = if (isPhonePortrait) 120.dp else dpx(60)),
                         modifier = Modifier.fillMaxSize()
                     ) {
                         itemsIndexed(list, contentType = { _, x -> if (x.kind == Kind.LIVE) 0 else if (land) 1 else 2 }) { idx, item ->
@@ -386,7 +390,11 @@ var restoreIdx by remember { mutableIntStateOf(state.focused) }
                 }
             }
         }
-        Sidebar(tab, onGoTab, Modifier.align(SidebarPrefs.align()), sideFocus) { inSidebar = it }
+        if (isPhonePortrait) {
+            TwoTabsBar(tab, onGoTab, Modifier.align(Alignment.BottomCenter))
+        } else {
+            Sidebar(tab, onGoTab, Modifier.align(SidebarPrefs.align()), sideFocus) { inSidebar = it }
+        }
     }
 }
 

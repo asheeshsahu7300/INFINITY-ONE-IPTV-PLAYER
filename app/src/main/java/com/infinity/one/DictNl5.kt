@@ -205,6 +205,7 @@ Kategorien werden erneut versucht …¦Categorieën worden opnieuw geprobeerd �
 Sender werden geladen ({#0}) …¦Zenders worden geladen ({#0}) …
 Filme werden geladen ({#0}) …¦Films worden geladen ({#0}) …
 Datenschutz¦Privacybeleid
+My Space¦Mijn ruimte
 Datei vom Gerät¦Bestand van het apparaat
 Auf diesem Gerät gibt es keine Dateiauswahl. Lade die Datei über die Handy-Seite rechts hoch.¦Op dit apparaat is er geen bestandskeuze. Upload het bestand via de telefoonpagina rechts.
 Das ist keine gültige M3U-Datei.¦Dit is geen geldig M3U-bestand.

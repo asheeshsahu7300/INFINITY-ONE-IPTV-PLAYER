@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -422,14 +423,15 @@ private fun DetailScreenFull(
         }
     }
 
+    val isPhonePortrait = DeviceMode.isPhonePortrait()
     Box(Modifier.fillMaxSize().background(Bg)) {
         val backdrop = meta?.backdrop?.takeIf { it.isNotBlank() }
         val poster = meta?.poster?.takeIf { it.isNotBlank() } ?: item.logo?.takeIf { it.isNotBlank() }
         CinematicBackdrop(backdrop, poster, item, Modifier.fillMaxSize())
-        LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(horizontal = 28.dp, vertical = 36.dp)) {
+        LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(horizontal = if (isPhonePortrait) 16.dp else 28.dp, vertical = if (isPhonePortrait) 16.dp else 36.dp)) {
             item {
                 Box(
-                    Modifier.fillMaxWidth().heightIn(min = dpx(if (embedded) 400 else 560))
+                    Modifier.fillMaxWidth().heightIn(min = if (isPhonePortrait) 260.dp else dpx(if (embedded) 400 else 560))
                         .onPreviewKeyEvent { ev ->
                             if (ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionUp) {
                                 if (onTopUp != null) {
@@ -452,7 +454,7 @@ private fun DetailScreenFull(
                             Kicker(kindLabel(item.kind), raw = false)
                             qualityOf(item)?.let { PreviewQualityBadge(it) }
                         }
-                        Text(raw = true, text = item.title, color = Tok.TextHi, fontSize = spx(84), lineHeight = spx(84), fontWeight = FontWeight.ExtraBold,
+                        Text(raw = true, text = item.title, color = Tok.TextHi, fontSize = if (isPhonePortrait) 28.sp else spx(84), lineHeight = if (isPhonePortrait) 32.sp else spx(84), fontWeight = FontWeight.ExtraBold,
                             letterSpacing = (-1.5).sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
                         HeroMetaLine(item, meta, dots = false)
                         // Movie started: small progress bar with remaining time
@@ -746,6 +748,19 @@ private fun DetailScreenFull(
             if (MetaRepo.enabled()) item {
                 Text("Dieses Produkt verwendet die TMDB-API, wird aber nicht von TMDB unterstützt oder zertifiziert.",
                     color = Muted, fontSize = 13.sp, modifier = Modifier.padding(top = 32.dp))
+            }
+        }
+        if (isPhonePortrait && !embedded) {
+            Box(
+                Modifier
+                    .padding(start = 16.dp, top = 16.dp)
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(Color(0x80000000))
+                    .clickable { onBack() },
+                contentAlignment = Alignment.Center
+            ) {
+                AppIcon(AIcon.Left, Color.White, size = 20.dp)
             }
         }
     }

@@ -107,10 +107,16 @@ val LocalScrollTop = compositionLocalOf<(suspend () -> Unit)?> { null }
 
 val LocalCardGrid = compositionLocalOf { CardGrid(183.dp, 141.dp, 183.dp, 16.dp, 330.dp, 12.dp) }
 
-fun cardGrid(contentW: Dp, size: Int = General.cardSize, perRow: Int = 0): CardGrid {
+fun cardGrid(contentW: Dp, size: Int = General.cardSize, perRow: Int = 0, isMobile: Boolean = false): CardGrid {
     val gap = dpx(16)
     val pgap = dpx(14)
     fun col(n: Int, g: Dp) = (contentW - g * (n - 1)) / n
+    if (isMobile) {
+        val land = 2
+        val poster = 3
+        val wide = 2
+        return CardGrid(col(land, gap), col(poster, pgap), col(land, gap), gap, col(wide, gap), pgap)
+    }
     // "View" button: small = more cards per row, large = fewer
     val land = intArrayOf(8, 6, 5)[size.coerceIn(0, 2)]
     val poster = if (perRow > 0) perRow else intArrayOf(10, 8, 6)[size.coerceIn(0, 2)]

@@ -14,19 +14,14 @@ import androidx.compose.runtime.setValue
  */
 object MobilePrefs {
     private const val PREFS = "infinity_mobile"
-    var landscape by mutableStateOf(true)
+    var landscape by mutableStateOf(false)
         private set
 
     /** Phone/tablet instead of TV (no Leanback, touch present). */
-    fun isMobile(c: Context): Boolean {
-        val pm = c.packageManager
-        val tv = pm.hasSystemFeature(PackageManager.FEATURE_LEANBACK) || pm.hasSystemFeature("android.software.leanback_only") ||
-            pm.hasSystemFeature("amazon.hardware.fire_tv")
-        return !tv && pm.hasSystemFeature(PackageManager.FEATURE_TOUCHSCREEN)
-    }
+    fun isMobile(c: Context): Boolean = !DeviceMode.isTv(c) && c.packageManager.hasSystemFeature(PackageManager.FEATURE_TOUCHSCREEN)
 
     fun apply(a: Activity) {
-        landscape = a.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean("landscape", true)
+        landscape = a.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean("landscape", false)
         if (!isMobile(a)) return
         a.requestedOrientation = if (landscape) ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE else ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
     }
