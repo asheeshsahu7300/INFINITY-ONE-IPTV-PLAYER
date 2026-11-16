@@ -310,6 +310,9 @@ object StalkerApi {
     /** Result of a run over pages: [total] entries according to the portal (-1 = unknown), [last] = last page loaded. */
     private class Paged(val ok: Boolean, val total: Int, val last: Int, val more: Boolean)
 
+    private fun isStalkerPortal(src: StalkerLogic.Source): Boolean =
+        src.portal.contains("stalker_portal", ignoreCase = true)
+
     /**
      * Pages [from] .. [from]+[max]-1 of a list to [each]. Stops at an empty or repeating page. [Paged.more] = the portal
      * has further pages; [Paged.ok] false = a page did not come even after logging in again.
@@ -321,28 +324,33 @@ object StalkerApi {
         var pages = from
         var total = -1
         var lastFp: String? = null
+        val isStalker = isStalkerPortal(src)
         while (page <= pages && page < from + max) {
             check()
             var o: JSONObject? = null
             for (attempt in 0 until 2) {
                 val s = runCatching { login(src, force = attempt > 0) }.getOrNull() ?: break
-                val res = js(src, StalkerLogic.api(s.endpoint, type, "get_ordered_list", "$extra&p=$page"), s.token)
-                o = when (res) {
-                    is JSONObject -> res
-                    is JSONArray -> JSONObject().put("data", res)
-                    else -> null
-                }
-                if (page == from && (o?.optJSONArray("data")?.length() ?: 0) == 0 && extra.contains("&sortby=")) {
-                    val fallbackExtra = extra.replace(Regex("""&sortby=[^&]*"""), "")
-                    val altRes = js(src, StalkerLogic.api(s.endpoint, type, "get_ordered_list", "$fallbackExtra&p=$page"), s.token)
-                    val altObj = when (altRes) {
-                        is JSONObject -> altRes
-                        is JSONArray -> JSONObject().put("data", altRes)
+                if (isStalker) {
+                    val res = js(src, StalkerLogic.api(s.endpoint, type, "get_ordered_list", "$extra&p=$page"), s.token)
+                    o = when (res) {
+                        is JSONObject -> res
+                        is JSONArray -> JSONObject().put("data", res)
                         else -> null
                     }
-                    if (altObj != null && (altObj.optJSONArray("data")?.length() ?: 0) > 0) {
-                        o = altObj
+                    if (page == from && (o?.optJSONArray("data")?.length() ?: 0) == 0 && extra.contains("&sortby=")) {
+                        val fallbackExtra = extra.replace(Regex("""&sortby=[^&]*"""), "")
+                        val altRes = js(src, StalkerLogic.api(s.endpoint, type, "get_ordered_list", "$fallbackExtra&p=$page"), s.token)
+                        val altObj = when (altRes) {
+                            is JSONObject -> altRes
+                            is JSONArray -> JSONObject().put("data", altRes)
+                            else -> null
+                        }
+                        if (altObj != null && (altObj.optJSONArray("data")?.length() ?: 0) > 0) {
+                            o = altObj
+                        }
                     }
+                } else {
+                    o = js(src, StalkerLogic.api(s.endpoint, type, "get_ordered_list", "$extra&p=$page"), s.token) as? JSONObject
                 }
                 if (o != null) break
             }
@@ -398,15 +406,30 @@ object StalkerApi {
 
         fun video(o: JSONObject, type: String, cid: String, cname: String) {
             val f = fields(o)
-            if (isSeries(o, type, cname)) {
-                val nm = (f["name"] ?: f["title"] ?: "").trim().lowercase()
-                if (nm.isNotEmpty() && series.add(nm)) {
-                    StalkerLogic.seriesEntry(src, f, cid, cname, if (type == "series") "s" else "v")?.let(put)
-                    cachePreload(f, true, cname)
+            if (isStalkerPortal(src)) {
+                // jiotv / stalker_portal approach: single media with flags
+                if (isSeries(o, type, cname)) {
+                    val nm = (f["name"] ?: f["title"] ?: "").trim().lowercase()
+                    if (nm.isNotEmpty() && series.add(nm)) {
+                        StalkerLogic.seriesEntry(src, f, cid, cname, if (type == "series") "s" else "v")?.let(put)
+                        cachePreload(f, true, cname)
+                    }
+                } else {
+                    val movieKey = f["id"] ?: f["cmd"]
+                    if (movieKey != null && movies.add(movieKey)) {
+                        StalkerLogic.movieEntry(src, f, cname)?.let(put)
+                        cachePreload(f, false, cname)
+                    }
                 }
             } else {
-                val movieKey = f["id"] ?: f["cmd"]
-                if (movieKey != null && movies.add(movieKey)) {
+                // Normal approach (e.g. livebox.pro)
+                if (type == "series" || o.optString("is_series") == "1") {
+                    val nm = (f["name"] ?: f["title"] ?: "").trim().lowercase()
+                    if (nm.isNotEmpty() && series.add(nm)) {
+                        StalkerLogic.seriesEntry(src, f, cid, cname, if (type == "series") "s" else "v")?.let(put)
+                        cachePreload(f, true, cname)
+                    }
+                } else if (movies.add(f["id"] ?: f["cmd"] ?: return)) {
                     StalkerLogic.movieEntry(src, f, cname)?.let(put)
                     cachePreload(f, false, cname)
                 }
@@ -431,12 +454,14 @@ object StalkerApi {
         }
     }
 
-    private fun catExtra(cid: String) = "&category=${enc(cid)}&genre=*&sortby=added"
+    private fun catExtra(src: StalkerLogic.Source, cid: String) =
+        if (isStalkerPortal(src)) "&category=${enc(cid)}&genre=*&sortby=added"
+        else "&category=${enc(cid)}&sortby=added"
 
     /** First page of a category. The portal sends the newest first; the app reads "new" from the end of the list: write oldest first. */
     private fun firstPage(src: StalkerLogic.Source, type: String, cid: String, cname: String, check: () -> Unit, em: Emitter): Paged {
         val rows = ArrayList<JSONObject>()
-        val r = pageRange(src, type, catExtra(cid), 1, 1, check) { rows.add(it) }
+        val r = pageRange(src, type, catExtra(src, cid), 1, 1, check) { rows.add(it) }
         for (i in rows.indices.reversed()) em.video(rows[i], type, cid, cname)
         return r
     }
@@ -449,7 +474,7 @@ object StalkerApi {
         val sb = StringBuilder()
         val em = Emitter(src) { sb.append(it).append('\n') }
         val rows = ArrayList<JSONObject>()
-        val r = pageRange(src, ref.type, catExtra(ref.id), ref.pages + 1, LOAD_CHUNK, check) { rows.add(it) }
+        val r = pageRange(src, ref.type, catExtra(src, ref.id), ref.pages + 1, LOAD_CHUNK, check) { rows.add(it) }
         // Oldest first (see [firstPage]); these titles are older than everything loaded so far and go in front
         for (i in rows.indices.reversed()) em.video(rows[i], ref.type, ref.id, ref.name)
         val cur = ref.copy(pages = maxOf(ref.pages, r.last), total = if (r.total > 0) r.total else ref.total)
