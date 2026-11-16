@@ -124,10 +124,10 @@ object StalkerApi {
 
     /** Response as the "js" part, null on error (the reason is then in [note]). */
     private fun js(src: StalkerLogic.Source, url: String, token: String?): Any? {
-        val (code, body) = call(src, url, token) ?: run { note = "keine Verbindung"; return null }
+        val (code, body) = call(src, url, token) ?: run { note = "no connection"; return null }
         if (code !in 200..299) { note = "HTTP $code"; return null }
         if (authFailed(body)) { note = "Authorization failed"; return null }
-        val o = jsonOf(body) ?: run { note = "keine gültige Antwort"; return null }
+        val o = jsonOf(body) ?: run { note = "invalid response"; return null }
         note = ""
         return o.opt("js")
     }

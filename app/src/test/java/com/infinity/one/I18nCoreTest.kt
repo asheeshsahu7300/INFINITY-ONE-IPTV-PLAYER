@@ -5,7 +5,7 @@ import org.junit.Before
 import org.junit.Test
 
 class I18nCoreTest {
-    @Before fun setUp() { I18nCore.load(DictA, DictB, DictC, DictD, DictE, DictF, DictG, DictH, DictI) }
+    @Before fun setUp() { I18nCore.load(DictA, DictB, DictC, DictD, DictE, DictF, DictG, DictH, DictI, DictJ) }
 
     private val EN = 1; private val TR = 2; private val BS = 3; private val HR = 4; private val SR = 5; private val DE = 0
 
@@ -45,6 +45,15 @@ class I18nCoreTest {
         assertEquals("Subtitle style", I18nCore.translate("Untertitel-Stil", EN))
         assertEquals("Playback speed", I18nCore.translate("Wiedergabe-Tempo", EN))
     }
+    @Test fun stalkerPhases() {
+        assertEquals("Loading categories …", I18nCore.translate("Kategorien werden geladen …", EN))
+        assertEquals("Loading categories (1/60) …", I18nCore.translate("Kategorien werden geladen (1/60) …", EN))
+        assertEquals("Loading channels (400) …", I18nCore.translate("Sender werden geladen (400) …", EN))
+        assertEquals("Portal not responding, retrying in 30 s …", I18nCore.translate("Portal antwortet nicht, neuer Versuch in 30 s …", EN))
+        assertEquals("Retrying categories …", I18nCore.translate("Kategorien werden erneut versucht …", EN))
+        assertEquals("The portal rejected the login. Check address and MAC address.", I18nCore.translate("Das Portal hat die Anmeldung abgelehnt. Adresse und MAC-Adresse prüfen.", EN))
+    }
+
     @Test fun systemLanguage() {
         assertEquals(TR, I18nCore.indexForSystem("tr"))
         assertEquals(EN, I18nCore.indexForSystem("ja"))
