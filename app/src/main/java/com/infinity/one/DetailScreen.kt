@@ -33,6 +33,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -428,7 +429,16 @@ private fun DetailScreenFull(
         val backdrop = meta?.backdrop?.takeIf { it.isNotBlank() }
         val poster = meta?.poster?.takeIf { it.isNotBlank() } ?: item.logo?.takeIf { it.isNotBlank() }
         CinematicBackdrop(backdrop, poster, item, Modifier.fillMaxSize())
-        LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(horizontal = if (isPhonePortrait) 16.dp else 28.dp, vertical = if (isPhonePortrait) 16.dp else 36.dp)) {
+        LazyColumn(
+            Modifier.fillMaxSize(),
+            state = listState,
+            contentPadding = PaddingValues(
+                start = if (isPhonePortrait) 16.dp else 28.dp,
+                end = if (isPhonePortrait) 16.dp else 28.dp,
+                top = if (isPhonePortrait) 64.dp else 36.dp,
+                bottom = if (isPhonePortrait) 60.dp else 36.dp
+            )
+        ) {
             item {
                 Box(
                     Modifier.fillMaxWidth().heightIn(min = if (isPhonePortrait) 260.dp else dpx(if (embedded) 400 else 560))
@@ -490,6 +500,96 @@ private fun DetailScreenFull(
                         }
                         if (showActions) {
                         Spacer(Modifier.height(4.dp))
+                        if (isPhonePortrait) {
+                            val seenMovie = item.kind == Kind.MOVIE && progress[ResumeLogic.key(0, 0)]?.done == true
+                            val primaryLabel = when {
+                                resume != null -> {
+                                    val oneSeason = seasons.size <= 1
+                                    when {
+                                        item.kind != Kind.SERIES -> Lang.tr("Fortsetzen · ") + (resume.pos / 60000) + " Min"
+                                        resumeSE == null -> Lang.tr("Fortsetzen")
+                                        resume.next -> Lang.tr("Weiter mit ") + (if (oneSeason) "Folge ${resumeSE.second}" else "S${resumeSE.first} · Folge ${resumeSE.second}")
+                                        else -> Lang.tr("Fortsetzen · ") + (if (oneSeason) "Folge ${resumeSE.second}" else "S${resumeSE.first} · Folge ${resumeSE.second}")
+                                    }
+                                }
+                                seenMovie -> Lang.tr("Erneut abspielen")
+                                else -> Lang.tr("Abspielen")
+                            }
+
+                            Column(
+                                modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+                                verticalArrangement = Arrangement.spacedBy(14.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(48.dp)
+                                        .clip(RoundedCornerShape(24.dp))
+                                        .background(Color.White)
+                                        .clickable {
+                                            if (resume != null) {
+                                                val t = WatchStore.target(ctx, item, resume)
+                                                onPlay(t.second, t.first, resume.pos)
+                                            } else {
+                                                playUrl?.let { onPlay(it, item.title + (if (item.kind == Kind.SERIES) " S" + season + "E" + (eps.firstOrNull()?.num ?: 1) else ""), 0L) }
+                                            }
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        AppIcon(AIcon.Play, Color.Black, size = 20.dp)
+                                        Text(primaryLabel, color = Color.Black, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceEvenly,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    val fav = Library.isFav(item.id)
+                                    MobileActionItem(
+                                        icon = if (fav) AIcon.HeartFilled else AIcon.Heart,
+                                        label = if (fav) Lang.tr("Favorit") else Lang.tr("Favoriten"),
+                                        tint = if (fav) Color(0xFFFF5252) else Color.White
+                                    ) { Library.toggleFav(ctx, item.id) }
+
+                                    MobileActionItem(
+                                        icon = AIcon.Play,
+                                        label = Lang.tr("Trailer"),
+                                        tint = Color.White
+                                    ) { openTrailer(ctx, meta?.trailerKey, item.title) }
+
+                                    MobileActionItem(
+                                        icon = AIcon.External,
+                                        label = Lang.tr("Extern"),
+                                        tint = Color.White
+                                    ) { playUrl?.let { openExternal(ctx, it, item.title) } }
+
+                                    if (resume != null) {
+                                        MobileActionItem(
+                                            icon = AIcon.Rewind,
+                                            label = Lang.tr("Von vorn"),
+                                            tint = Color.White
+                                        ) { playUrl?.let { onPlay(it, item.title + (if (item.kind == Kind.SERIES) " S" + season + "E" + (eps.firstOrNull()?.num ?: 1) else ""), 0L) } }
+                                    } else {
+                                        val k = ResumeLogic.key(0, 0)
+                                        val seen = progress[k]?.done == true
+                                        MobileActionItem(
+                                            icon = if (seen) AIcon.Rewind else AIcon.Check,
+                                            label = if (seen) Lang.tr("Ungesehen") else Lang.tr("Gesehen"),
+                                            tint = Color.White
+                                        ) {
+                                            EpProgress.mark(ctx, item.id, listOf(k), !seen)
+                                            progVer++
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
                         // Buttons in the style of the big picture, smaller (round 15). Padding: the enlarged button would otherwise be cut off.
                         // Two rows: Play/Resume/From start on top, below List, Favorite, Trailer, External. So nothing is
                         // cut off at the right edge any more. Padding: the enlarged button would otherwise be cropped.
@@ -567,6 +667,7 @@ private fun DetailScreenFull(
                                 }
                             }
                         }
+                        }
                         if (item.kind == Kind.MOVIE && movieAlts.size > 1) Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                             // Choose the source explicitly (takes precedence over quality) or automatically to suit the device
                             val so = listOf("Automatisch") + movieVars.map { it.label }
@@ -634,6 +735,55 @@ private fun DetailScreenFull(
                 }
             }
             if (item.kind == Kind.SERIES) item(key = "eppane") {
+                if (isPhonePortrait) {
+                    Column(Modifier.fillMaxWidth().padding(top = 16.dp)) {
+                        if (seasons.size > 1) {
+                            LazyRow(
+                                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                items(seasons, key = { it }) { sn ->
+                                    val isCur = sn == season
+                                    val cnt = remember(item.id, sn) { item.episodes.count { it.season == sn } }
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(50))
+                                            .background(if (isCur) Color.White else Color(0x28FFFFFF))
+                                            .clickable { season = sn }
+                                            .padding(horizontal = 14.dp, vertical = 7.dp)
+                                    ) {
+                                        Text(
+                                            text = Lang.tr("Staffel ") + sn + " ($cnt)",
+                                            color = if (isCur) Color.Black else Color(0xDDFFFFFF),
+                                            fontSize = 13.sp,
+                                            fontWeight = if (isCur) FontWeight.Bold else FontWeight.Medium
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            val epsInSeason = remember(season, item.episodes) {
+                                item.episodes.filter { it.season == season }.sortedBy { it.num }
+                            }
+                            epsInSeason.forEach { ep ->
+                                val v = pick(ep)
+                                EpisodeRow(
+                                    ep, null, v, progress[ResumeLogic.key(ep.season, ep.num)],
+                                    Modifier.fillMaxWidth(),
+                                    fallbackPoster = poster,
+                                    onFocus = {},
+                                    onToggleSeen = {
+                                        val k = ResumeLogic.key(ep.season, ep.num)
+                                        val seen = progress[k]?.done == true
+                                        EpProgress.mark(ctx, item.id, listOf(k), !seen)
+                                        progVer++
+                                    }
+                                ) { onPlay(v.url, item.title + " S" + ep.season + "E" + ep.num, 0L) }
+                            }
+                        }
+                    }
+                } else {
                 // Episodes area (round 16): seasons on the left with the shown season marked, episodes on the right.
                 // Right in the episode list = next season, Left = to the season selection.
                 Row(
@@ -737,6 +887,7 @@ private fun DetailScreenFull(
                         }
                     }
                 }
+                }
             }
             credits?.let { c ->
                 if (c.cast.isNotEmpty()) item(key = "cast") { CastRow(c.cast, castState, if (memKey?.startsWith("c:") == true) memKey.drop(2).toIntOrNull() else null, restoreReq) { p -> DetailFocus.last[item.id] = "c:" + p.id; onPerson(PersonRef(p.id, p.name, p.photo, item.id)) } }
@@ -753,7 +904,8 @@ private fun DetailScreenFull(
         if (isPhonePortrait && !embedded) {
             Box(
                 Modifier
-                    .padding(start = 16.dp, top = 16.dp)
+                    .statusBarsPadding()
+                    .padding(start = 16.dp, top = 8.dp)
                     .size(40.dp)
                     .clip(CircleShape)
                     .background(Color(0x80000000))
@@ -871,5 +1023,43 @@ private fun SeasonEntry(season: Int, count: Int, selected: Boolean, modifier: Mo
             Text("Staffel $season", color = if (selected || f) Tok.TextHi else Tok.TextLow, fontSize = spx(26), fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium, maxLines = 1)
             if (selected) Text(text = if (count == 1) "1 Folge" else "$count Folgen", color = Muted, fontSize = spx(15))
         }
+    }
+}
+
+@Composable
+private fun RowScope.MobileActionItem(
+    icon: AIcon,
+    label: String,
+    tint: Color = Color.White,
+    onClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .weight(1f)
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .padding(vertical = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(44.dp)
+                .clip(RoundedCornerShape(50))
+                .background(Color(0x28FFFFFF))
+                .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(50)),
+            contentAlignment = Alignment.Center
+        ) {
+            AppIcon(icon, tint, size = 20.dp)
+        }
+        Text(
+            label,
+            color = Color(0xDDFFFFFF),
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }

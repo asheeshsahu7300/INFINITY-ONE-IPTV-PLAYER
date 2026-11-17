@@ -245,7 +245,7 @@ var restoreIdx by remember { mutableIntStateOf(state.focused) }
                 if (e.type == KeyEventType.KeyDown && e.key == Key.Menu) { runCatching { filterFocus.requestFocus() }; true } else false
             }
     ) {
-        Column(Modifier.fillMaxSize().sidebarPad(!isPhonePortrait).padding(horizontal = if (isPhonePortrait) 12.dp else 32.dp, vertical = if (isPhonePortrait) 12.dp else DS.PageY)) {
+        Column(Modifier.fillMaxSize().sidebarPad(!isPhonePortrait).statusBarsPadding().padding(horizontal = if (isPhonePortrait) 16.dp else 32.dp, vertical = if (isPhonePortrait) 12.dp else DS.PageY)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 Text(req.title, color = Color.White, fontSize = spx(34), fontWeight = FontWeight.ExtraBold, maxLines = 1)
                 Text(if (ready) "${list.size} Titel" else "Lade …", color = Muted, fontSize = 16.sp)

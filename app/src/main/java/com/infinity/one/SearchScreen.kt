@@ -33,6 +33,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -162,6 +163,7 @@ fun SearchScreen(
             Column(
                 Modifier
                     .fillMaxSize()
+                    .statusBarsPadding()
                     .padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
@@ -183,7 +185,7 @@ fun SearchScreen(
                 LazyColumn(
                     Modifier.weight(1f).fillMaxWidth(),
                     state = state,
-                    contentPadding = PaddingValues(bottom = 120.dp),
+                    contentPadding = PaddingValues(bottom = 150.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     if (q.length < 2) {
@@ -374,23 +376,37 @@ private fun SearchRowHeader(title: String, count: Int, headerReq: FocusRequester
             PillMemory.key = null
         }
     }
-    Row(Modifier.padding(start = DS.PageX, top = 22.dp), verticalAlignment = Alignment.CenterVertically) {
-        SmallPill("Alle $count", Modifier.focusRequester(headerReq).onPreviewKeyEvent { ev ->
-            if (ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionDown) {
-                // First card not in view (row shifted sideways) or not yet composed: first to the start, then highlight.
-                // Before, the focus got stuck here because the failure was swallowed.
-                if (runCatching { firstCard.requestFocus() }.isFailure) sc.launch {
-                    rowState.scrollToItem(0)
-                    repeat(3) { withFrameNanos { } }
-                    runCatching { firstCard.requestFocus() }
-                }
-                true
-            } else false
-        }, trailing = AIcon.Right) { PillMemory.key = key; onAll() }
-        Spacer(Modifier.width(16.dp))
-        Box(Modifier.width(4.dp).height(22.dp).clip(RoundedCornerShape(2.dp)).background(Accent1))
-        Spacer(Modifier.width(10.dp))
-        Text(title, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+    val isPhone = DeviceMode.isPhonePortrait()
+    if (isPhone) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f, fill = false)) {
+                Box(Modifier.width(3.dp).height(18.dp).clip(RoundedCornerShape(2.dp)).background(Accent1))
+                Spacer(Modifier.width(8.dp))
+                Text(title, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            SmallPill(Lang.tr("Alle") + " $count", Modifier.focusRequester(headerReq), trailing = AIcon.Right) { PillMemory.key = key; onAll() }
+        }
+    } else {
+        Row(Modifier.padding(start = DS.PageX, top = 22.dp), verticalAlignment = Alignment.CenterVertically) {
+            SmallPill("Alle $count", Modifier.focusRequester(headerReq).onPreviewKeyEvent { ev ->
+                if (ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionDown) {
+                    if (runCatching { firstCard.requestFocus() }.isFailure) sc.launch {
+                        rowState.scrollToItem(0)
+                        repeat(3) { withFrameNanos { } }
+                        runCatching { firstCard.requestFocus() }
+                    }
+                    true
+                } else false
+            }, trailing = AIcon.Right) { PillMemory.key = key; onAll() }
+            Spacer(Modifier.width(16.dp))
+            Box(Modifier.width(4.dp).height(22.dp).clip(RoundedCornerShape(2.dp)).background(Accent1))
+            Spacer(Modifier.width(10.dp))
+            Text(title, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+        }
     }
 }
 

@@ -159,12 +159,15 @@ fun SettingsHub(onAdd: () -> Unit, reload: () -> Unit) {
         runCatching { if (page < 0) cardFocus[last].requestFocus() else backFocus.requestFocus() }
     }
 
+    val isPhonePortrait = DeviceMode.isPhonePortrait()
     // No verticalScroll of its own: the settings tab sits in a LazyColumn that scrolls itself.
-    Column(Modifier.padding(horizontal = DS.PageX, vertical = dpx(20)), verticalArrangement = Arrangement.spacedBy(dpx(18))) {
+    Column(Modifier.padding(horizontal = if (isPhonePortrait) 16.dp else DS.PageX, vertical = if (isPhonePortrait) 8.dp else dpx(20)), verticalArrangement = Arrangement.spacedBy(dpx(18))) {
         if (page < 0) {
-            Column(verticalArrangement = Arrangement.spacedBy(dpx(4))) {
-                Text(Lang.tr("Einstellungen"), color = Color.White, fontSize = spx(38), fontWeight = FontWeight.ExtraBold)
-                Text(Lang.tr("Alles rund um Aussehen, Wiedergabe und Konto"), color = Tok.TextLow, fontSize = spx(16))
+            if (!isPhonePortrait) {
+                Column(verticalArrangement = Arrangement.spacedBy(dpx(4))) {
+                    Text(Lang.tr("Einstellungen"), color = Color.White, fontSize = spx(38), fontWeight = FontWeight.ExtraBold)
+                    Text(Lang.tr("Alles rund um Aussehen, Wiedergabe und Konto"), color = Tok.TextLow, fontSize = spx(16))
+                }
             }
             Column(
                 modifier = Modifier.fillMaxWidth().widthIn(max = dpx(920)),

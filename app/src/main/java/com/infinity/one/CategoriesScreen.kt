@@ -119,7 +119,7 @@ fun CategoriesScreen(
             }
             Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(Bg.copy(alpha = .97f), Bg.copy(alpha = .6f)))))
         }
-        Column(Modifier.fillMaxSize().sidebarPad(!isPhonePortrait).padding(horizontal = if (isPhonePortrait) 12.dp else 32.dp, vertical = if (isPhonePortrait) 12.dp else DS.PageY)) {
+        Column(Modifier.fillMaxSize().sidebarPad(!isPhonePortrait).statusBarsPadding().padding(horizontal = if (isPhonePortrait) 16.dp else 32.dp, vertical = if (isPhonePortrait) 12.dp else DS.PageY)) {
             Text(req.title, color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.ExtraBold)
             Spacer(Modifier.height(10.dp))
             Box(Modifier.onFocusChanged { inPills = it.hasFocus }) {

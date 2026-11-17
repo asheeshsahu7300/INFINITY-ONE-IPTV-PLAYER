@@ -7,6 +7,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
@@ -214,9 +216,83 @@ fun LiveTab(liveAll: List<Item>, groupsAll: Map<String, List<Item>>, favsAll: Li
     LaunchedEffect(Unit) {
         snapshotFlow { focusTarget }.collectLatest { t -> if (focusedState.value != null) kotlinx.coroutines.delay(300); focusedState.value = t }
     }
+    val isPhonePortrait = DeviceMode.isPhonePortrait()
     Box(Modifier.fillMaxSize()) {
         FocusedBackdrop(focusedState, Modifier.fillMaxSize())
-        Row(Modifier.fillMaxSize().padding(top = 20.dp)) {
+        if (isPhonePortrait) {
+            Column(Modifier.fillMaxSize().statusBarsPadding()) {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Live TV", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
+                    Text("${live.size} Sender", color = Muted, fontSize = 14.sp)
+                }
+
+                LazyRow(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    contentPadding = PaddingValues(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(names) { n ->
+                        if (n in listOf("GUIDE", "MULTI", "PL", "HIDDEN", "NEW")) return@items
+                        val label = when (n) {
+                            "HOME" -> Lang.tr("Übersicht")
+                            "ALL" -> Lang.tr("Alle") + " (${live.size})"
+                            FAV_CAT -> Lang.tr("Favoriten") + " (${favs.size})"
+                            "SEARCH" -> Lang.tr("Suche")
+                            else -> {
+                                val count = groups[n]?.size ?: genres[n]?.size
+                                (LiveGenre.byKey(n)?.label ?: n) + if (count != null) " ($count)" else ""
+                            }
+                        }
+                        val isSelected = sel == n
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(50))
+                                .background(if (isSelected) Color.White else Color(0x28FFFFFF))
+                                .clickable { sel = n }
+                                .padding(horizontal = 14.dp, vertical = 7.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = label,
+                                color = if (isSelected) Color.Black else Color(0xDDFFFFFF),
+                                fontSize = 13.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                            )
+                        }
+                    }
+                }
+
+                Box(Modifier.weight(1f).fillMaxWidth()) {
+                    if (sel == "HOME" && live.isNotEmpty()) {
+                        LiveHome(live, genres.filterKeys { it !in HiddenCats.list }, favs, firstChan, onOpen = { ch, l -> ZapContext.list = l; ZapContext.key = "ALL"; onOpen(ch) }, bottomPadding = 150.dp)
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                            contentPadding = PaddingValues(top = 8.dp, bottom = 150.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            itemsIndexed(list, key = if (curList != null) { ix, ch -> ch.id + "#" + ix } else null) { _, ch ->
+                                ChannelLine(
+                                    ch, Modifier, curList,
+                                    onNewList = { newList(ch.id) },
+                                    onFocus = {},
+                                    variants = variantsOf[ch.id].orEmpty(),
+                                    favShown = if (sel == FAV_CAT) list else null,
+                                    onVariant = { v -> ZapContext.list = list; ZapContext.key = sel; LiveMemory.setSel(ctx, sel); onOpen(v) }
+                                ) {
+                                    ZapContext.list = list; ZapContext.key = sel; LiveMemory.setSel(ctx, sel); onOpen(ch)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            Row(Modifier.fillMaxSize().padding(top = 20.dp)) {
             LazyColumn(Modifier.width(270.dp).fillMaxHeight().padding(start = 24.dp, end = 8.dp), state = catState, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 // Stable keys: after moving a category, focus and menu state move with the row (duplicates get an index suffix)
                 itemsIndexed(names, key = { i, n -> catKeys.getOrElse(i) { "$n#$i" } }) { _, n ->
@@ -477,8 +553,9 @@ fun LiveTab(liveAll: List<Item>, groupsAll: Map<String, List<Item>>, favsAll: Li
                     )
                 } else FocusedNowPanel(focusedState, list.firstOrNull())
             }
-                    }
-}
+        }
+        }
+        }
         ask?.let { a -> NameDialog(a.title, a.initial, onDismiss = { ask = null }) { a.onSave(it); ask = null } }
     }
 }
@@ -691,7 +768,7 @@ fun ReminderCard(r: Reminder, modifier: Modifier, onClose: () -> Unit, onSwitch:
 
 /** Start in the Live TV area: last watched, favorites and a row of channels per genre. */
 @Composable
-private fun LiveHome(live: List<Item>, genres: Map<String, List<Item>>, favs: List<Item>, firstReq: FocusRequester, onOpen: (Item, List<Item>) -> Unit) {
+private fun LiveHome(live: List<Item>, genres: Map<String, List<Item>>, favs: List<Item>, firstReq: FocusRequester, onOpen: (Item, List<Item>) -> Unit, bottomPadding: Dp = 48.dp) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val byId = remember(live) { live.associateBy { it.id } }
     val recent = remember(live, History.ids.size) { Parental.filter(History.ids.mapNotNull { byId[it] }).take(24) }
@@ -700,7 +777,7 @@ private fun LiveHome(live: List<Item>, genres: Map<String, List<Item>>, favs: Li
     if (favs.isNotEmpty()) rows.add("Favoriten" to favs.take(40))
     for ((k, l) in genres) rows.add((LiveGenre.byKey(k)?.label ?: k) to l.take(40))
     if (rows.isEmpty()) rows.add("Alle Sender" to live.take(40))
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 48.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = bottomPadding), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         itemsIndexed(rows, key = { _, r -> r.first }) { ri, r ->
             Column {
                 Text(r.first, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 8.dp, top = 12.dp))

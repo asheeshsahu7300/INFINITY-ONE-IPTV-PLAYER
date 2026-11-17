@@ -151,7 +151,9 @@ fun AddPlaylistScreen(onDone: () -> Unit) {
     Row(
         Modifier.fillMaxSize()
             .background(Brush.radialGradient(listOf(lerp(Bg, Accent1, 0.14f), Bg), radius = 1400f))
-            .padding(horizontal = if (compact) 10.dp else 28.dp, vertical = if (compact) 6.dp else 12.dp),
+            .statusBarsPadding()
+            .navigationBarsPadding()
+            .padding(horizontal = if (compact) 16.dp else 28.dp, vertical = if (compact) 10.dp else 12.dp),
         horizontalArrangement = Arrangement.spacedBy(if (compact) 0.dp else 28.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

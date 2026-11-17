@@ -387,15 +387,15 @@ fun HomeScreen(
                 else -> "Infinity"
             }
             Row(
-                m.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                m.fillMaxWidth().statusBarsPadding().padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
                     text = title,
                     color = Color.White,
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.ExtraBold
                 )
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -618,8 +618,9 @@ fun HomeScreen(
                 // The settings page stays mounted while the list is empty or being rebuilt (e.g. after a playlist mode switch):
                 // replacing it would drop the focus, and the next OK press could land on "Add playlist"
                 !keepSettings && ((PlaylistStore.loading && all.isEmpty()) || computing) -> SkeletonHome()
-                !keepSettings && all.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                !keepSettings && all.isEmpty() -> Box(Modifier.fillMaxSize()) {
+                    if (isPhonePortrait) header(Modifier.align(Alignment.TopCenter))
+                    Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
                         BrandLogo(Modifier.height(54.dp))
                         val err = PlaylistStore.error
                         // Everything hidden (language filter does not fit this playlist): be able to get it back directly
@@ -663,7 +664,7 @@ fun HomeScreen(
                         if (ct > 1f) clipRect(top = ct) { this@drawWithContent.drawContent() } else drawContent()
                     },
                     state = states[tab],
-                    contentPadding = PaddingValues(bottom = if (isPhonePortrait) 120.dp else dpx(300))
+                    contentPadding = PaddingValues(bottom = if (isPhonePortrait) 150.dp else dpx(300))
                 ) {
                     when (tab) {
                         0 -> {
@@ -692,7 +693,7 @@ fun HomeScreen(
                                 if (editing) item(key = "eb$blockId") { HomeEditBar(ctx, blockId) }
                                 if (!HomeLayout.shown(blockId)) continue
                                 when (blockId) {
-                                    "tiles" -> { item(key = "tiles") { QuickTiles(tiles) } }
+                                    "tiles" -> { if (!isPhonePortrait) item(key = "tiles") { QuickTiles(tiles) } }
                                     "clock" -> { item(key = "clock") { ClockWidget() } }
                                     // Continue watching directly under the tiles: whoever watches a lot wants to continue in few clicks
                                     "resume" -> { if (resumeList.isNotEmpty()) item(key = "resume") { ResumeRow(resumeList, cardW, onResume) } }

@@ -23,6 +23,8 @@ import androidx.compose.ui.unit.sp
  * Modern floating Two-Tabs navigation architecture for Phone (portrait):
  * 1. Upper Pill: Category Navigation (Live TV, Movie, Series, Favourite)
  * 2. Lower Pill: Primary Navigation (Home, Search, My Space, Settings)
+ *
+ * Uses [navigationBarsPadding] to ensure the bar sits cleanly above system gesture handles.
  */
 @Composable
 fun TwoTabsBar(
@@ -34,10 +36,11 @@ fun TwoTabsBar(
     Column(
         modifier = modifier
             .fillMaxWidth()
+            .navigationBarsPadding()
             .padding(horizontal = 16.dp)
-            .padding(bottom = 14.dp),
+            .padding(bottom = 10.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         AnimatedVisibility(
             visible = showUpper,
@@ -65,18 +68,18 @@ private fun UpperCategoryPill(
 
     Box(
         modifier = Modifier
-            .shadow(12.dp, RoundedCornerShape(50), ambientColor = Color.Black, spotColor = Color.Black)
+            .shadow(16.dp, RoundedCornerShape(50), ambientColor = Color.Black, spotColor = Color.Black)
             .clip(RoundedCornerShape(50))
             .background(
                 Brush.horizontalGradient(
                     listOf(
-                        Color(0xF0181726),
-                        Color(0xF0241A35),
-                        Color(0xF0181726)
+                        Color(0xF618162A),
+                        Color(0xF82C1F45),
+                        Color(0xF618162A)
                     )
                 )
             )
-            .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(50))
+            .border(1.dp, Color(0x35FFFFFF), RoundedCornerShape(50))
             .padding(horizontal = 6.dp, vertical = 4.dp)
     ) {
         Row(
@@ -89,7 +92,7 @@ private fun UpperCategoryPill(
                 Box(
                     modifier = Modifier
                         .clip(itemShape)
-                        .background(if (isSelected) Accent1.copy(alpha = 0.28f) else Color.Transparent)
+                        .background(if (isSelected) Color(0x38FFFFFF) else Color.Transparent)
                         .clickable { onSelect(tabId) }
                         .padding(horizontal = 14.dp, vertical = 7.dp),
                     contentAlignment = Alignment.Center
@@ -107,7 +110,7 @@ private fun UpperCategoryPill(
                         modifier = Modifier
                             .width(1.dp)
                             .height(14.dp)
-                            .background(Color(0x1FFFFFFF))
+                            .background(Color(0x22FFFFFF))
                     )
                 }
             }
@@ -130,15 +133,22 @@ private fun LowerNavigationPill(
 
     Box(
         modifier = Modifier
-            .shadow(16.dp, RoundedCornerShape(50), ambientColor = Color.Black, spotColor = Color.Black)
+            .shadow(24.dp, RoundedCornerShape(50), ambientColor = Color.Black, spotColor = Color.Black)
             .clip(RoundedCornerShape(50))
-            .background(Color(0xF212121B))
-            .border(1.dp, Color(0x38FFFFFF), RoundedCornerShape(50))
-            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .background(
+                Brush.verticalGradient(
+                    listOf(
+                        Color(0xFA151424),
+                        Color(0xFE0C0B14)
+                    )
+                )
+            )
+            .border(1.dp, Color(0x35FFFFFF), RoundedCornerShape(50))
+            .padding(horizontal = 8.dp, vertical = 5.dp)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             items.forEach { item ->
                 val isSelected = when (item.id) {
@@ -153,12 +163,17 @@ private fun LowerNavigationPill(
                 Column(
                     modifier = Modifier
                         .clip(itemShape)
+                        .background(if (isSelected) Color(0x30FFFFFF) else Color.Transparent)
                         .clickable { onSelect(item.id) }
-                        .padding(horizontal = 14.dp, vertical = 4.dp),
+                        .padding(horizontal = 14.dp, vertical = 5.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
-                    val tint = if (isSelected) Accent1 else Color(0x99FFFFFF)
+                    val tint = when {
+                        isSelected && item.id == 0 -> Color(0xFFFFD54F) // Amber gold glow for active home
+                        isSelected -> Color.White
+                        else -> Color(0x99FFFFFF)
+                    }
                     if (item.menuIconId >= 0) {
                         MenuIcon(item.menuIconId, tint, Modifier.size(20.dp))
                     } else if (item.icon != null) {
