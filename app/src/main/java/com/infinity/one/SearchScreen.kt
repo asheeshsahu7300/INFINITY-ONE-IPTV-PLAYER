@@ -210,7 +210,15 @@ fun SearchScreen(
                     } else {
                         val openS: (Item) -> Unit = { i -> AppSettings.addSearch(ctx, q); onOpen(i) }
                         if (searching) item {
-                            Text(Lang.tr("Suche …"), color = Muted, fontSize = 16.sp, modifier = Modifier.padding(vertical = 16.dp))
+                            Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(vertical = 8.dp)) {
+                                Text(Lang.tr("Suche …"), color = Muted, fontSize = 14.sp)
+                                val sk = shimmerColor()
+                                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    repeat(3) {
+                                        SkeletonBox(Modifier.width(135.dp).height(202.dp), sk, RoundedCornerShape(12.dp))
+                                    }
+                                }
+                            }
                         } else if (rm.isEmpty() && rs.isEmpty() && rl.isEmpty()) item {
                             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                                 EmptyState(AIcon.Info, Lang.tr("Keine Treffer"), Lang.tr("Prüfe die Schreibweise oder suche nach einem Teil des Titels."))
@@ -384,7 +392,7 @@ private fun SearchRowHeader(title: String, count: Int, headerReq: FocusRequester
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f, fill = false)) {
-                Box(Modifier.width(3.dp).height(18.dp).clip(RoundedCornerShape(2.dp)).background(Accent1))
+                Box(Modifier.width(3.dp).height(18.dp).clip(RoundedCornerShape(2.dp)).background(Color.White))
                 Spacer(Modifier.width(8.dp))
                 Text(title, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
@@ -473,16 +481,24 @@ private fun SearchRow(
             LazyRow(
                 state = rowState,
                 contentPadding = PaddingValues(horizontal = if (isPhone) 0.dp else DS.PageX, vertical = if (isPhone) 6.dp else 18.dp),
-                horizontalArrangement = Arrangement.spacedBy(if (isPhone) 10.dp else 18.dp)
+                horizontalArrangement = Arrangement.spacedBy(if (isPhone) 12.dp else 18.dp)
             ) {
                 itemsIndexed(list.take(60)) { i, x ->
                     val fr = (if (i == 0) Modifier.focusRequester(firstCard) else Modifier).onFocusChanged { if (it.hasFocus) report(x) }
-                    val w = if (isPhone) (if (x.kind == Kind.LIVE) 160.dp else 120.dp) else (if (x.kind == Kind.LIVE) (cardW * 4 / 3).dp else cardW.dp)
-                    if (x.kind == Kind.LIVE) LiveCard(x, { onOpen(x) }, Modifier.width(w).then(fr))
-                    else PosterCard(x, { onOpen(x) }, Modifier.width(w).restoreFocus(x.id).then(fr))
+                    if (isPhone) {
+                        if (x.kind == Kind.LIVE) {
+                            ChannelNowCard(x, Modifier.width(200.dp).then(fr)) { onOpen(x) }
+                        } else {
+                            RowPosterCard(x, 135.dp, Modifier.restoreFocus(x.id).then(fr), overlay = 3, expand = true) { onOpen(x) }
+                        }
+                    } else {
+                        val w = if (x.kind == Kind.LIVE) (cardW * 4 / 3).dp else cardW.dp
+                        if (x.kind == Kind.LIVE) LiveCard(x, { onOpen(x) }, Modifier.width(w).then(fr))
+                        else PosterCard(x, { onOpen(x) }, Modifier.width(w).restoreFocus(x.id).then(fr))
+                    }
                 }
                 item {
-                    val w = if (isPhone) (if (liveRow) 160.dp else 120.dp) else (if (liveRow) (cardW * 4 / 3).dp else cardW.dp)
+                    val w = if (isPhone) (if (liveRow) 180.dp else 135.dp) else (if (liveRow) (cardW * 4 / 3).dp else cardW.dp)
                     SearchAllTile(liveRow, w, onAll)
                 }
             }

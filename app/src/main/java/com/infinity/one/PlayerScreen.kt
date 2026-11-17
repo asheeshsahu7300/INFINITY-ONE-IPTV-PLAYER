@@ -1,7 +1,10 @@
 package com.infinity.one
 
+import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import android.content.pm.ActivityInfo
+import android.content.res.Configuration
 import android.net.ConnectivityManager
 import android.net.Network
 import android.os.Handler
@@ -15,6 +18,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,9 +30,11 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.widthIn
@@ -70,6 +76,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -151,6 +158,29 @@ private fun findActivity(c: Context): ComponentActivity? =
 @Composable
 fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesItem: Item? = null, onBack: () -> Unit) {
     val ctx = LocalContext.current
+    val act = remember(ctx) { findActivity(ctx) }
+    val cfg = LocalConfiguration.current
+    val isLandscape = cfg.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val isPhone = DeviceMode.isPhonePortrait() || (!DeviceMode.isTablet() && isLandscape)
+
+    fun toggleLandscape() {
+        act?.let { a ->
+            a.requestedOrientation = if (isLandscape) {
+                ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            } else {
+                ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            }
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            act?.let { a ->
+                a.requestedOrientation = if (MobilePrefs.landscape) ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE else ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            }
+        }
+    }
+
     CatFavs.init(ctx)
     // Own HTTP settings: follows redirects even from http to https (many IPTV servers do that)
     // and gives up after 10 s connect time or 15 s read time instead of waiting forever.
@@ -1190,7 +1220,13 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
         // Aspect ratio (in the shrunken guide picture always "Fit"). Zoom: picture area larger than the screen, centered;
         // 4:3: area in 4:3 aspect ratio, centered.
         val am = if (showGuide) 0 else aspect
-        val videoMod = if (showGuide) Modifier.align(Alignment.TopEnd).padding(top = 20.dp, end = 24.dp).size(width = 400.dp, height = 225.dp).clip(RoundedCornerShape(DS.RadiusM))
+        val videoMod = if (showGuide) {
+            if (DeviceMode.isPhonePortrait()) {
+                Modifier.align(Alignment.TopCenter).fillMaxWidth().aspectRatio(16f / 9f)
+            } else {
+                Modifier.align(Alignment.TopEnd).padding(top = 20.dp, end = 24.dp).size(width = 400.dp, height = 225.dp).clip(RoundedCornerShape(DS.RadiusM))
+            }
+        }
         else when (am) {
             3, 4 -> {
                 val z = if (am == 3) 1.15f else 1.33f
@@ -1403,46 +1439,99 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
                         .background(Brush.verticalGradient(0f to Color.Transparent, 0.45f to Color(0x85000000), 1f to PT.ScrimBottom))
                 )
 
-                // Title (top left) – for live the info block at the bottom takes over
-                if (!cur.live) {
+                if (isPhone) {
                     val baseTitle = if (cur.season > 0 && cur.episode > 0) cur.title.substringBeforeLast(" S" + cur.season + "E" + cur.episode) else cur.title
-                    Column(
-                        Modifier.align(Alignment.TopStart).padding(start = PT.MarginX, top = PT.MarginY, end = 360.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    Row(
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .fillMaxWidth()
+                            .statusBarsPadding()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text(baseTitle, color = Color.White, fontSize = 28.sp, lineHeight = 34.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis, raw = cur.archive != null)
-                        cur.archive?.let { a ->
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                PChip("Archiv", icon = AIcon.Catchup)
-                                PChip(a.chTitle, raw = true)
-                                PChip(dayLabel(a.prog.start) + "  " + hhmm(a.prog.start) + "–" + hhmm(a.prog.end), raw = true)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.weight(1f, fill = false)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0x66000000))
+                                    .clickable { handleBack() },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                AppIcon(AIcon.Left, Color.White, size = 20.dp)
+                            }
+                            Column(Modifier.weight(1f, fill = false)) {
+                                Text(baseTitle, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                if (cur.season > 0 && cur.episode > 0) {
+                                    Text("S${cur.season} · E${cur.episode}" + (epName?.let { " · $it" } ?: ""), color = Color(0xBBFFFFFF), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
                             }
                         }
-                        if (cur.season > 0 && cur.episode > 0) {
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                PChip("Staffel " + cur.season)
-                                PChip("Folge " + cur.episode)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            badges.firstOrNull()?.let { PChip(it) }
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0x66000000))
+                                    .clickable { toggleLandscape() },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                AppIcon(if (isLandscape) AIcon.FullscreenExit else AIcon.Fullscreen, Color.White, size = 20.dp)
                             }
-                            epName?.let { Text(it, color = Color(0xD9FFFFFF), fontSize = 18.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, raw = true) }
                         }
                     }
-                }
+                } else {
+                    // Title (top left) – for live the info block at the bottom takes over
+                    if (!cur.live) {
+                        val baseTitle = if (cur.season > 0 && cur.episode > 0) cur.title.substringBeforeLast(" S" + cur.season + "E" + cur.episode) else cur.title
+                        Column(
+                            Modifier.align(Alignment.TopStart).padding(start = PT.MarginX, top = PT.MarginY, end = 360.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(baseTitle, color = Color.White, fontSize = 28.sp, lineHeight = 34.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis, raw = cur.archive != null)
+                            cur.archive?.let { a ->
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    PChip("Archiv", icon = AIcon.Catchup)
+                                    PChip(a.chTitle, raw = true)
+                                    PChip(dayLabel(a.prog.start) + "  " + hhmm(a.prog.start) + "–" + hhmm(a.prog.end), raw = true)
+                                }
+                            }
+                            if (cur.season > 0 && cur.episode > 0) {
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    PChip("Staffel " + cur.season)
+                                    PChip("Folge " + cur.episode)
+                                }
+                                epName?.let { Text(it, color = Color(0xD9FFFFFF), fontSize = 18.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, raw = true) }
+                            }
+                        }
+                    }
 
-                // Badges top right
-                Row(
-                    Modifier.align(Alignment.TopEnd).padding(end = PT.MarginX, top = PT.MarginY),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (cur.live && Recorder.isRecording(cur.itemId)) PChip("● REC", raw = true)
-                    if (cur.live) PLiveChip(behindSec = behindSec)
-                    else badges.forEachIndexed { i, b -> PChip(b, filled = i == 0 && b == "4K") }
+                    // Badges top right
+                    Row(
+                        Modifier.align(Alignment.TopEnd).padding(end = PT.MarginX, top = PT.MarginY),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (cur.live && Recorder.isRecording(cur.itemId)) PChip("● REC", raw = true)
+                        if (cur.live) PLiveChip(behindSec = behindSec)
+                        else badges.forEachIndexed { i, b -> PChip(b, filled = i == 0 && b == "4K") }
+                    }
                 }
 
                 val setLabel: (String) -> Unit = { ctrlLabel = it }
 
                 Column(
                     Modifier.align(Alignment.BottomCenter).fillMaxWidth()
-                        .padding(start = PT.MarginX, end = PT.MarginX, bottom = PT.MarginY)
+                        .navigationBarsPadding()
+                        .padding(start = if (isPhone) 16.dp else PT.MarginX, end = if (isPhone) 16.dp else PT.MarginX, bottom = if (isPhone) 12.dp else PT.MarginY)
                 ) {
                     if (cur.live) {
                         LiveInfoBlock(curItem, cur.title, if (curIdx >= 0) curIdx + 1 else 0, epg)
@@ -1548,6 +1637,11 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
                             PRoundButton(label = "Extern öffnen", onLabel = setLabel, onClick = { player.pause(); openExternal(ctx, cur.url, cur.title) }) {
                                 PlayerIcon(PIcon.External, it)
                             }
+                            if (isPhone) {
+                                PRoundButton(size = if (isPhone) 40.dp else PT.BtnSize, label = if (isLandscape) "Hochformat" else "Querformat", onLabel = setLabel, onClick = { toggleLandscape() }) {
+                                    AppIcon(if (isLandscape) AIcon.FullscreenExit else AIcon.Fullscreen, it, size = 22.dp)
+                                }
+                            }
                         }
                         Row(
                             Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 10.dp).height(22.dp),
@@ -1589,16 +1683,23 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
                                 else false
                             }
                         ) {
+                            val bSize = if (isPhone) 40.dp else PT.BtnSize
+                            val bPrimary = if (isPhone) 48.dp else PT.BtnPrimary
+                            val bGap = if (isPhone) 6.dp else PT.BtnGap
+                            val bScroll = rememberScrollState()
                             Row(
-                                Modifier.fillMaxWidth().height(PT.BtnPrimary + 12.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically
+                                Modifier
+                                    .fillMaxWidth()
+                                    .horizontalScroll(bScroll)
+                                    .padding(vertical = 4.dp),
+                                horizontalArrangement = if (isPhone) Arrangement.spacedBy(bGap) else Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Row(
-                                    Modifier.padding(start = 8.dp, top = 6.dp, bottom = 6.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(PT.BtnGap),
+                                    horizontalArrangement = Arrangement.spacedBy(bGap),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    PRoundButton(enabled = if (arch) archPrev != null else hasPrev, label = prevLabel, onLabel = setLabel, onClick = {
+                                    PRoundButton(enabled = if (arch) archPrev != null else hasPrev, size = bSize, label = prevLabel, onLabel = setLabel, onClick = {
                                         val ch = curItem
                                         val pv = archPrev
                                         if (arch) { if (ch != null && pv != null) playArchive(ch, pv) }
@@ -1606,23 +1707,23 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
                                     }) {
                                         PlayerIcon(PIcon.PrevEp, it)
                                     }
-                                    PRoundButton(label = "$stepS Sekunden zurück", onLabel = setLabel, onClick = { stepSeek(-1, fromBar = false) }) { c ->
+                                    PRoundButton(size = bSize, label = "$stepS Sekunden zurück", onLabel = setLabel, onClick = { stepSeek(-1, fromBar = false) }) { c ->
                                         Box(contentAlignment = Alignment.Center) {
-                                            PlayerIcon(PIcon.Replay, c, size = 30.dp)
-                                            Text(stepS, color = c, fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.offset(y = 2.dp))
+                                            PlayerIcon(PIcon.Replay, c, size = if (isPhone) 24.dp else 30.dp)
+                                            Text(stepS, color = c, fontSize = if (isPhone) 11.sp else 13.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.offset(y = 2.dp))
                                         }
                                     }
                                     PRoundButton(
-                                        Modifier.focusRequester(playBtn), size = PT.BtnPrimary,
+                                        Modifier.focusRequester(playBtn), size = bPrimary,
                                         label = if (playing) "Pause" else "Abspielen", onLabel = setLabel, onClick = { togglePlay() }
-                                    ) { PlayerIcon(if (playing) PIcon.Pause else PIcon.Play, it, size = 32.dp) }
-                                    PRoundButton(label = "$stepS Sekunden vor", onLabel = setLabel, onClick = { stepSeek(1, fromBar = false) }) { c ->
+                                    ) { PlayerIcon(if (playing) PIcon.Pause else PIcon.Play, it, size = if (isPhone) 26.dp else 32.dp) }
+                                    PRoundButton(size = bSize, label = "$stepS Sekunden vor", onLabel = setLabel, onClick = { stepSeek(1, fromBar = false) }) { c ->
                                         Box(contentAlignment = Alignment.Center) {
-                                            PlayerIcon(PIcon.Forward, c, size = 30.dp)
-                                            Text(stepS, color = c, fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.offset(y = 2.dp))
+                                            PlayerIcon(PIcon.Forward, c, size = if (isPhone) 24.dp else 30.dp)
+                                            Text(stepS, color = c, fontSize = if (isPhone) 11.sp else 13.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.offset(y = 2.dp))
                                         }
                                     }
-                                    PRoundButton(enabled = arch || hasNext, label = nextLabel, onLabel = setLabel, onClick = {
+                                    PRoundButton(enabled = arch || hasNext, size = bSize, label = nextLabel, onLabel = setLabel, onClick = {
                                         val ch = curItem
                                         val nx = archNext
                                         if (arch) { if (ch != null && nx != null) playArchive(ch, nx) else backToLive() }
@@ -1632,28 +1733,32 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
                                     }
                                 }
                                 Row(
-                                    Modifier.padding(end = 8.dp, top = 6.dp, bottom = 6.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(PT.BtnGap),
+                                    horizontalArrangement = Arrangement.spacedBy(bGap),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     if (arch) {
-                                        PRoundButton(label = "Zurück zu Live", onLabel = setLabel, onClick = { backToLive() }) {
-                                            AppIcon(AIcon.Live, it, size = 26.dp)
+                                        PRoundButton(size = bSize, label = "Zurück zu Live", onLabel = setLabel, onClick = { backToLive() }) {
+                                            AppIcon(AIcon.Live, it, size = 22.dp)
                                         }
-                                        PRoundButton(Modifier.focusRequester(btn.getValue(Panel.ARCHIVE)), label = "Archiv: verpasste Sendungen", onLabel = setLabel, onClick = { openPanel(Panel.ARCHIVE) }) {
-                                            AppIcon(AIcon.History, it, size = 26.dp)
+                                        PRoundButton(Modifier.focusRequester(btn.getValue(Panel.ARCHIVE)), size = bSize, label = "Archiv: verpasste Sendungen", onLabel = setLabel, onClick = { openPanel(Panel.ARCHIVE) }) {
+                                            AppIcon(AIcon.History, it, size = 22.dp)
                                         }
                                     }
-                                    PRoundButton(Modifier.focusRequester(btn.getValue(Panel.TRACKS)), label = "Audio & Untertitel", onLabel = setLabel, onClick = { openPanel(Panel.TRACKS) }) {
+                                    PRoundButton(Modifier.focusRequester(btn.getValue(Panel.TRACKS)), size = bSize, label = "Audio & Untertitel", onLabel = setLabel, onClick = { openPanel(Panel.TRACKS) }) {
                                         PlayerIcon(PIcon.AudioSubs, it)
                                     }
                                     if (epList.size > 1) {
-                                        PRoundButton(Modifier.focusRequester(btn.getValue(Panel.EPISODES)), label = "Folgen", onLabel = setLabel, onClick = { openPanel(Panel.EPISODES) }) {
+                                        PRoundButton(Modifier.focusRequester(btn.getValue(Panel.EPISODES)), size = bSize, label = "Folgen", onLabel = setLabel, onClick = { openPanel(Panel.EPISODES) }) {
                                             PlayerIcon(PIcon.Episodes, it)
                                         }
                                     }
-                                    PRoundButton(Modifier.focusRequester(btn.getValue(Panel.MENU)), label = "Einstellungen", onLabel = setLabel, onClick = { openPanel(Panel.MENU) }) {
+                                    PRoundButton(Modifier.focusRequester(btn.getValue(Panel.MENU)), size = bSize, label = "Einstellungen", onLabel = setLabel, onClick = { openPanel(Panel.MENU) }) {
                                         PlayerIcon(PIcon.Settings, it)
+                                    }
+                                    if (isPhone) {
+                                        PRoundButton(size = bSize, label = if (isLandscape) "Hochformat" else "Querformat", onLabel = setLabel, onClick = { toggleLandscape() }) {
+                                            AppIcon(if (isLandscape) AIcon.FullscreenExit else AIcon.Fullscreen, it, size = 22.dp)
+                                        }
                                     }
                                 }
                             }

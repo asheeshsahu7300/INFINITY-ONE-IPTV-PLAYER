@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -17,10 +18,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -71,7 +75,9 @@ import kotlinx.coroutines.launch
 
 /** Shortly after closing a selection window in the guide (Back) do not perform another back step. */
 object GuideBack {
-    @Volatile var mutedUntil = 0L
+    @Volatile
+    var mutedUntil = 0L
+
     /** Back step of the open guide (the player intercepts the Back key first and calls this). */
     var handler: (() -> Unit)? = null
 }
@@ -120,7 +126,11 @@ fun Guide(
     val minStart = base - pastDays * 86400L
     // "Now" moves along: the highlight and the state of the shows are updated every 30 s
     var nowSec by remember { mutableLongStateOf(openedAt) }
-    LaunchedEffect(Unit) { while (true) { delay(30_000); nowSec = System.currentTimeMillis() / 1000 } }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(30_000); nowSec = System.currentTimeMillis() / 1000
+        }
+    }
     // dp per minute: "Small" shows a good 3 hours at once, "Medium" a good 2 hours
     val zooms = listOf(3.5f, 5f, 8f)
     val zoomNames = listOf("Klein", "Mittel", "Groß")
@@ -188,8 +198,11 @@ fun Guide(
         if (System.currentTimeMillis() >= GuideBack.mutedUntil) when {
             inBlock -> {
                 val r = rowReq
-                if (r == null || !runCatching { r.requestFocus() }.isSuccess) { if (!runCatching { catReq.requestFocus() }.isSuccess) onClose() }
+                if (r == null || !runCatching { r.requestFocus() }.isSuccess) {
+                    if (!runCatching { catReq.requestFocus() }.isSuccess) onClose()
+                }
             }
+
             !inCats -> if (!runCatching { catReq.requestFocus() }.isSuccess) onClose()
             else -> onClose()
         }
@@ -202,16 +215,45 @@ fun Guide(
 
     if (showSearch) GuideSearchDialog(
         all,
-        onPick = { ch -> showSearch = false; val p = onPickIn; if (p != null) p(ch, all) else onPick(ch) },
+        onPick = { ch ->
+            showSearch = false;
+            val p = onPickIn; if (p != null) p(ch, all) else onPick(ch)
+        },
         onClose = { showSearch = false; GuideBack.mutedUntil = System.currentTimeMillis() + 400 }
     )
+    val isPhone = DeviceMode.isPhonePortrait()
+    if (DeviceMode.isPhonePortrait()) {
+        MobilePortraitGuide(
+            curId = curId,
+            cats = cats,
+            catIdx = catIdx,
+            onCatIdx = { catIdx = it },
+            shown = shown,
+            nowSec = nowSec,
+            onClose = onClose,
+            onSearch = { showSearch = true },
+            onPick = { ch ->
+                val p = onPickIn
+                if (p != null) p(ch, shown) else onPick(ch)
+            }
+        )
+        return
+    }
+
     // Top: header + selected show on the left, the running picture on the right (PlayerScreen shrinks it to 400 × 225 dp, top right).
     // Below: categories and program grid across the full width – so several hours are visible at once.
     Column(
         Modifier.fillMaxSize()
             .drawBehind {
-                val l = size.width - 424.dp.toPx(); val t = 20.dp.toPx()
-                val hole = androidx.compose.ui.geometry.RoundRect(l, t, l + 400.dp.toPx(), t + 225.dp.toPx(), androidx.compose.ui.geometry.CornerRadius(DS.RadiusM.toPx()))
+                val l = size.width - 424.dp.toPx()
+                val t = 20.dp.toPx()
+                val hole = androidx.compose.ui.geometry.RoundRect(
+                    l,
+                    t,
+                    l + 400.dp.toPx(),
+                    t + 225.dp.toPx(),
+                    androidx.compose.ui.geometry.CornerRadius(DS.RadiusM.toPx())
+                )
                 val path = androidx.compose.ui.graphics.Path().apply {
                     fillType = androidx.compose.ui.graphics.PathFillType.EvenOdd
                     addRect(androidx.compose.ui.geometry.Rect(0f, 0f, size.width, size.height))
@@ -224,143 +266,254 @@ fun Guide(
         Row(Modifier.fillMaxWidth().height(238.dp)) {
             Column(Modifier.weight(1f).fillMaxHeight().padding(end = 20.dp)) {
                 // Header: title, date and time, Now and View
-                Row(Modifier.fillMaxWidth().height(58.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    MenuIcon(3, Accent1, Modifier.size(30.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text("TV-Guide", color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.ExtraBold)
-                        Text("Live TV · Jetzt und in den nächsten Stunden", color = Muted, fontSize = 13.sp, maxLines = 1)
-                    }
-                    Row(
-                        Modifier.clip(RoundedCornerShape(50)).background(Color(0x1FFFFFFF)).border(1.dp, Color(0x1FFFFFFF), RoundedCornerShape(50))
-                            .padding(horizontal = 14.dp, vertical = 7.dp),
-                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Text(raw = true, text = dayLabel(nowSec), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                        Box(Modifier.width(1.dp).height(14.dp).background(Color(0x44FFFFFF)))
-                        Text(raw = true, text = hhmm(nowSec), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold, style = TNUM)
-                    }
-                    SmallPill("Suche", icon = AIcon.Edit) { showSearch = true }
-                    SmallPill("Jetzt", icon = AIcon.Dot) { jumpNow() }
-                    Box {
-                        SmallPill("", icon = AIcon.Gear) { showSettings = true }
-                        if (showSettings) {
-                            val first = remember { FocusRequester() }
-                            LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
-                            Popup(
-                                alignment = Alignment.TopStart, offset = IntOffset(0, 80),
-                                onDismissRequest = { showSettings = false }, properties = PopupProperties(focusable = true)
-                            ) {
-                                Column(
-                                    Modifier.width(380.dp).clip(RoundedCornerShape(DS.RadiusL)).background(Tok.GlassStrong).padding(18.dp),
-                                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                                ) {
-                                    Text("TV-Guide – Ansicht", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                                        Text("Zoom", color = Color.White, fontSize = 15.sp)
-                                        SmallPill(zoomNames[GuidePrefs.zoom], Modifier.focusRequester(first)) { GuidePrefs.zoom = (GuidePrefs.zoom + 1) % 3; GuidePrefs.save(ctx) }
-                                    }
-                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                                        Text("Zeilenhöhe", color = Color.White, fontSize = 15.sp)
-                                        SmallPill(rowNames[GuidePrefs.rowSize]) { GuidePrefs.rowSize = (GuidePrefs.rowSize + 1) % 3; GuidePrefs.save(ctx) }
-                                    }
-                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                                        Text("Vergangene Sendungen", color = Color.White, fontSize = 15.sp)
-                                        SmallPill(if (GuidePrefs.hidePast) "Ausblenden" else "Abdunkeln") { GuidePrefs.hidePast = !GuidePrefs.hidePast; GuidePrefs.save(ctx) }
-                                    }
-                                    Text("Zurück: Sendung, Sender, Kategorie, dann schließen", color = Muted, fontSize = 13.sp)
-                                    Text("Jetzt ${hhmm(nowSec)} · Zeitzone ${epgZone().id} (änderbar unter Einstellungen > Sprache & Region)", color = Muted, fontSize = 13.sp)
-                                }
-                            }
-                        }
-                    }
-                }
-                GuideDetailPanel(infoE, infoItem, nowSec, Modifier.weight(1f).fillMaxWidth().padding(top = 4.dp))
-            }
-            Spacer(Modifier.width(400.dp))
-        }
-        Row(Modifier.weight(1f).fillMaxWidth().padding(top = 8.dp)) {
-            // Categories
-            LazyColumn(
-                Modifier.width(206.dp).fillMaxHeight().clip(RoundedCornerShape(DS.RadiusL)).background(Color(0x0FFFFFFF)),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(8.dp),
-                verticalArrangement = Arrangement.spacedBy(3.dp)
-            ) {
-                itemsIndexed(cats) { ci, c ->
-                    GuideCatRow(c, ci == catIdx, if (ci == catIdx) Modifier.focusRequester(catReq) else Modifier,
-                        onFocus = { inCats = true; inBlock = false; if (catIdx != ci) catIdx = ci }, onLeft = onClose) { runCatching { focus.requestFocus() } }
-                }
-            }
-            Spacer(Modifier.width(12.dp))
-            BoxWithConstraints(Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(DS.RadiusL)).background(Color(0x0AFFFFFF)).padding(horizontal = 8.dp, vertical = 6.dp)) {
-                val vm = ((maxWidth - 208.dp).value / dpm).toInt().coerceAtLeast(40)
-                SideEffect { if (viewMin != vm) viewMin = vm }
-                Column(Modifier.fillMaxSize()) {
-                    Row(Modifier.height(34.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(raw = true, text = cats.getOrNull(catIdx)?.name?.let { Lang.tr(it) } ?: "", color = Muted, fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.width(208.dp).padding(start = 6.dp))
-                        Box(Modifier.weight(1f).fillMaxHeight().clipToBounds()) {
-                            // only the visible time marks (with archive the grid reaches days back)
-                            var t = maxOf(minStart, winStart - winStart % 1800 - 3600)
-                            val tEnd = minOf(base + maxSpan, winStart + viewMin * 60L + 3600)
-                            while (t < tEnd) {
-                                val x = (t - winStart) / 60f * dpm
-                                if (x > -100f && x < viewMin * dpm + 40f) {
-                                    val isDay = SettingsLogic.isMidnight(t, epgZone())
-                                    val label = if (isDay) dayLabel(t) else hhmm(t)
-                                    Text(
-                                        label, color = if (isDay) Accent2 else Muted, fontSize = 13.sp,
-                                        fontWeight = if (isDay || t % 3600L == 0L) FontWeight.Bold else FontWeight.Medium, style = TNUM,
-                                        modifier = Modifier.offset(x = x.dp).align(Alignment.CenterStart)
-                                    )
-                                }
-                                t += 1800
-                            }
-                            val nx = (nowSec - winStart) / 60f * dpm
-                            if (nx > 0f && nx < viewMin * dpm) Box(Modifier.offset(x = (nx - 3f).dp).size(6.dp).clip(RoundedCornerShape(50)).background(Accent2).align(Alignment.BottomStart))
-                        }
-                    }
-                    if (shown.isEmpty()) Text("Keine Sender", color = Muted, fontSize = 15.sp, modifier = Modifier.padding(16.dp))
-                    LazyColumn(
-                        state = ls,
-                        // Held Up/Down: at most ~9 steps per second (as in the Live TV list), and rows wait with loading
-                        modifier = Modifier.weight(1f).onPreviewKeyEvent { e ->
-                            if (e.type == KeyEventType.KeyDown && (e.key == Key.DirectionDown || e.key == Key.DirectionUp) && e.nativeKeyEvent.repeatCount > 0) {
-                                val now = android.os.SystemClock.uptimeMillis()
-                                LiveHold.lastRepeat = now
-                                if (now - LiveHold.lastStep < 110) true else { LiveHold.lastStep = now; false }
-                            } else false
-                        }
-                    ) {
-                        itemsIndexed(shown) { i, ch ->
-                            val cellReq = if (i == idx) focus else remember { FocusRequester() }
-                            GuideRow(
-                                ch, ch.id == curId, { winStart }, viewMin, dpm, nowSec, rowH.dp, GuidePrefs.hidePast, cellReq,
-                                onInfo = { e -> infoE = e; infoItem = ch },
-                                onShift = { e -> shiftFor(e) },
-                                onRowFocus = { e -> rowFocus.value = e to ch; jumpScope.launch { holdJump(ls, i) } },
-                                onBlock = { inB, r -> inBlock = inB; inCats = false; rowReq = r; if (inB) rowFocus.value = null },
-                                // Left from the channel column: to the categories (before: close)
-                                onClose = { if (!runCatching { catReq.requestFocus() }.isSuccess) onClose() },
-                                onArchive = { e -> onArchive(ch, e) },
-                                onPick = { val p = onPickIn; if (p != null) p(ch, shown) else onPick(ch) }
+                Row(
+                    Modifier.fillMaxWidth().height(58.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                        MenuIcon(3, Accent1, Modifier.size(30.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text("TV-Guide", color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.ExtraBold)
+                            Text(
+                                "Live TV · Jetzt und in den nächsten Stunden",
+                                color = Muted,
+                                fontSize = 13.sp,
+                                maxLines = 1
                             )
                         }
+                        Row(
+                            Modifier.clip(RoundedCornerShape(50)).background(Color(0x1FFFFFFF))
+                                .border(1.dp, Color(0x1FFFFFFF), RoundedCornerShape(50))
+                                .padding(horizontal = 14.dp, vertical = 7.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Text(
+                                raw = true,
+                                text = dayLabel(nowSec),
+                                color = Color.White,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Box(Modifier.width(1.dp).height(14.dp).background(Color(0x44FFFFFF)))
+                            Text(
+                                raw = true,
+                                text = hhmm(nowSec),
+                                color = Color.White,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                style = TNUM
+                            )
+                        }
+                        SmallPill("Suche", icon = AIcon.Edit) { showSearch = true }
+                        SmallPill("Jetzt", icon = AIcon.Dot) { jumpNow() }
+                        Box {
+                            SmallPill("", icon = AIcon.Gear) { showSettings = true }
+                            if (showSettings) {
+                                val first = remember { FocusRequester() }
+                                LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
+                                Popup(
+                                    alignment = Alignment.TopStart,
+                                    offset = IntOffset(0, 80),
+                                    onDismissRequest = { showSettings = false },
+                                    properties = PopupProperties(focusable = true)
+                                ) {
+                                    Column(
+                                        Modifier.width(380.dp).clip(RoundedCornerShape(DS.RadiusL))
+                                            .background(Tok.GlassStrong).padding(18.dp),
+                                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                                    ) {
+                                        Text(
+                                            "TV-Guide – Ansicht",
+                                            color = Color.White,
+                                            fontSize = 18.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Text("Zoom", color = Color.White, fontSize = 15.sp)
+                                            SmallPill(
+                                                zoomNames[GuidePrefs.zoom],
+                                                Modifier.focusRequester(first)
+                                            ) { GuidePrefs.zoom = (GuidePrefs.zoom + 1) % 3; GuidePrefs.save(ctx) }
+                                        }
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Text("Zeilenhöhe", color = Color.White, fontSize = 15.sp)
+                                            SmallPill(rowNames[GuidePrefs.rowSize]) {
+                                                GuidePrefs.rowSize = (GuidePrefs.rowSize + 1) % 3; GuidePrefs.save(ctx)
+                                            }
+                                        }
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Text("Vergangene Sendungen", color = Color.White, fontSize = 15.sp)
+                                            SmallPill(if (GuidePrefs.hidePast) "Ausblenden" else "Abdunkeln") {
+                                                GuidePrefs.hidePast = !GuidePrefs.hidePast; GuidePrefs.save(ctx)
+                                            }
+                                        }
+                                        Text(
+                                            "Zurück: Sendung, Sender, Kategorie, dann schließen",
+                                            color = Muted,
+                                            fontSize = 13.sp
+                                        )
+                                        Text(
+                                            "Jetzt ${hhmm(nowSec)} · Zeitzone ${epgZone().id} (änderbar unter Einstellungen > Sprache & Region)",
+                                            color = Muted,
+                                            fontSize = 13.sp
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    GuideDetailPanel(infoE, infoItem, nowSec, Modifier.weight(1f).fillMaxWidth().padding(top = 4.dp))
+                }
+                Spacer(Modifier.width(400.dp))
+            }
+            Row(Modifier.weight(1f).fillMaxWidth().padding(top = 8.dp)) {
+                // Categories
+                LazyColumn(
+                    Modifier.width(206.dp).fillMaxHeight().clip(RoundedCornerShape(DS.RadiusL))
+                        .background(Color(0x0FFFFFFF)),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(3.dp)
+                ) {
+                    itemsIndexed(cats) { ci, c ->
+                        GuideCatRow(
+                            c,
+                            ci == catIdx,
+                            if (ci == catIdx) Modifier.focusRequester(catReq) else Modifier,
+                            onFocus = { inCats = true; inBlock = false; if (catIdx != ci) catIdx = ci },
+                            onLeft = onClose
+                        ) { runCatching { focus.requestFocus() } }
+                    }
+                }
+                Spacer(Modifier.width(12.dp))
+                BoxWithConstraints(
+                    Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(DS.RadiusL))
+                        .background(Color(0x0AFFFFFF)).padding(horizontal = 8.dp, vertical = 6.dp)
+                ) {
+                    val vm = ((maxWidth - 208.dp).value / dpm).toInt().coerceAtLeast(40)
+                    SideEffect { if (viewMin != vm) viewMin = vm }
+                    Column(Modifier.fillMaxSize()) {
+                        Row(Modifier.height(34.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                raw = true,
+                                text = cats.getOrNull(catIdx)?.name?.let { Lang.tr(it) } ?: "",
+                                color = Muted,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.width(208.dp).padding(start = 6.dp))
+                            Box(Modifier.weight(1f).fillMaxHeight().clipToBounds()) {
+                                // only the visible time marks (with archive the grid reaches days back)
+                                var t = maxOf(minStart, winStart - winStart % 1800 - 3600)
+                                val tEnd = minOf(base + maxSpan, winStart + viewMin * 60L + 3600)
+                                while (t < tEnd) {
+                                    val x = (t - winStart) / 60f * dpm
+                                    if (x > -100f && x < viewMin * dpm + 40f) {
+                                        val isDay = SettingsLogic.isMidnight(t, epgZone())
+                                        val label = if (isDay) dayLabel(t) else hhmm(t)
+                                        Text(
+                                            label,
+                                            color = if (isDay) Accent2 else Muted,
+                                            fontSize = 13.sp,
+                                            fontWeight = if (isDay || t % 3600L == 0L) FontWeight.Bold else FontWeight.Medium,
+                                            style = TNUM,
+                                            modifier = Modifier.offset(x = x.dp).align(Alignment.CenterStart)
+                                        )
+                                    }
+                                    t += 1800
+                                }
+                                val nx = (nowSec - winStart) / 60f * dpm
+                                if (nx > 0f && nx < viewMin * dpm) Box(
+                                    Modifier.offset(x = (nx - 3f).dp).size(6.dp).clip(RoundedCornerShape(50))
+                                        .background(Accent2).align(Alignment.BottomStart)
+                                )
+                            }
+                        }
+                        if (shown.isEmpty()) Text(
+                            "Keine Sender",
+                            color = Muted,
+                            fontSize = 15.sp,
+                            modifier = Modifier.padding(16.dp)
+                        )
+                        LazyColumn(
+                            state = ls,
+                            // Held Up/Down: at most ~9 steps per second (as in the Live TV list), and rows wait with loading
+                            modifier = Modifier.weight(1f).onPreviewKeyEvent { e ->
+                                if (e.type == KeyEventType.KeyDown && (e.key == Key.DirectionDown || e.key == Key.DirectionUp) && e.nativeKeyEvent.repeatCount > 0) {
+                                    val now = android.os.SystemClock.uptimeMillis()
+                                    LiveHold.lastRepeat = now
+                                    if (now - LiveHold.lastStep < 110) true else {
+                                        LiveHold.lastStep = now; false
+                                    }
+                                } else false
+                            }
+                        ) {
+                            itemsIndexed(shown) { i, ch ->
+                                val cellReq = if (i == idx) focus else remember { FocusRequester() }
+                                GuideRow(
+                                    ch,
+                                    ch.id == curId,
+                                    { winStart },
+                                    viewMin,
+                                    dpm,
+                                    nowSec,
+                                    rowH.dp,
+                                    GuidePrefs.hidePast,
+                                    cellReq,
+                                    onInfo = { e -> infoE = e; infoItem = ch },
+                                    onShift = { e -> shiftFor(e) },
+                                    onRowFocus = { e ->
+                                        rowFocus.value = e to ch; jumpScope.launch {
+                                        holdJump(
+                                            ls,
+                                            i
+                                        )
+                                    }
+                                    },
+                                    onBlock = { inB, r ->
+                                        inBlock = inB; inCats = false; rowReq = r; if (inB) rowFocus.value = null
+                                    },
+                                    // Left from the channel column: to the categories (before: close)
+                                    onClose = { if (!runCatching { catReq.requestFocus() }.isSuccess) onClose() },
+                                    onArchive = { e -> onArchive(ch, e) },
+                                    onPick = { val p = onPickIn; if (p != null) p(ch, shown) else onPick(ch) }
+                                )
+                            }
+                        }
                     }
                 }
             }
         }
-        // Key hints
-        Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.CenterVertically) {
-            GuideHint(null, "Sendungen", AIcon.Left, AIcon.Right)
-            GuideHint(null, "Sender", AIcon.Up, AIcon.Down)
-            // What OK does on the selected show (before a button in the detail field that was dropped for long texts)
-            val okText = guideOkAction(infoE, infoItem, nowSec)
-            GuideHint("OK", okText)
-            if (pastDays > 0) GuideHint(null, "1 Tag", AIcon.Rewind, AIcon.FastForward)
-            GuideHint("Zurück", "Sender, Kategorie, schließen")
+        // Key hints (TV only)
+        if (!isPhone) {
+            Row(
+                Modifier.fillMaxWidth().padding(top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(20.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                GuideHint(null, "Sendungen", AIcon.Left, AIcon.Right)
+                GuideHint(null, "Sender", AIcon.Up, AIcon.Down)
+                // What OK does on the selected show (before a button in the detail field that was dropped for long texts)
+                val okText = guideOkAction(infoE, infoItem, nowSec)
+                GuideHint("OK", okText)
+                if (pastDays > 0) GuideHint(null, "1 Tag", AIcon.Rewind, AIcon.FastForward)
+                GuideHint("Zurück", "Sender, Kategorie, schließen")
+            }
         }
-}
-}
+    }
 
 /** Opaque colors of the show fields (no transparency, see GuideRow). */
 private val BlockBase = Color(0xFF1C202B)
@@ -390,24 +543,51 @@ fun guideCategories(list: List<Item>, all: List<Item>): List<GuideCat> {
 }
 
 @Composable
-private fun GuideCatRow(c: GuideCat, selected: Boolean, modifier: Modifier, onFocus: () -> Unit, onLeft: () -> Unit, onClick: () -> Unit) {
+private fun GuideCatRow(
+    c: GuideCat,
+    selected: Boolean,
+    modifier: Modifier,
+    onFocus: () -> Unit,
+    onLeft: () -> Unit,
+    onClick: () -> Unit
+) {
     var f by remember { mutableStateOf(false) }
     val shape = RoundedCornerShape(DS.RadiusS)
     Row(
         modifier.fillMaxWidth().clip(shape)
             .background(if (f) RowFocus else if (selected) Accent1.copy(alpha = .18f) else Color.Transparent)
-            .border(if (f) DS.Border else 1.dp, if (f) Accent2 else if (selected) Accent1.copy(alpha = .55f) else Color.Transparent, shape)
+            .border(
+                if (f) DS.Border else 1.dp,
+                if (f) Accent2 else if (selected) Accent1.copy(alpha = .55f) else Color.Transparent,
+                shape
+            )
             .onFocusChanged { f = it.isFocused; if (it.isFocused) onFocus() }
             // Left in the categories: close the guide (like Back)
-            .onPreviewKeyEvent { ev -> if (ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionLeft) { onLeft(); true } else false }
+            .onPreviewKeyEvent { ev ->
+                if (ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionLeft) {
+                    onLeft(); true
+                } else false
+            }
             .clickable(onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        if (c.icon != null) AppIcon(c.icon, if (c.icon == AIcon.Star) DS.Gold else if (selected) Accent1 else Muted, size = 15.dp)
+        if (c.icon != null) AppIcon(
+            c.icon,
+            if (c.icon == AIcon.Star) DS.Gold else if (selected) Accent1 else Muted,
+            size = 15.dp
+        )
         // Provider names stay as they are; the app's own labels are translated
-        Text(c.name, color = Color.White, fontSize = 14.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f), raw = c.icon == null || c.icon == AIcon.Lists)
+        Text(
+            c.name,
+            color = Color.White,
+            fontSize = 14.sp,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+            raw = c.icon == null || c.icon == AIcon.Lists
+        )
         Text(raw = true, text = c.items.size.toString(), color = Muted, fontSize = 13.sp)
     }
 }
@@ -416,10 +596,17 @@ private fun GuideCatRow(c: GuideCat, selected: Boolean, modifier: Modifier, onFo
 private fun GuideHint(key: String?, text: String, vararg keys: AIcon) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
         Row(
-            Modifier.clip(RoundedCornerShape(DS.RadiusXs)).background(Color(0x2EFFFFFF)).padding(horizontal = 6.dp, vertical = 2.dp),
+            Modifier.clip(RoundedCornerShape(DS.RadiusXs)).background(Color(0x2EFFFFFF))
+                .padding(horizontal = 6.dp, vertical = 2.dp),
             horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically
         ) {
-            if (key != null) Text(key, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 2.dp))
+            if (key != null) Text(
+                key,
+                color = Color.White,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(horizontal = 2.dp)
+            )
             for (k in keys) AppIcon(k, Color.White, size = 14.dp)
         }
         Text(text, color = Muted, fontSize = 13.sp)
@@ -434,13 +621,18 @@ private fun GuideHint(key: String?, text: String, vararg keys: AIcon) {
 private fun GuideDetailPanel(e: EpgEntry?, ch: Item?, nowSec: Long, modifier: Modifier) {
     val shape = RoundedCornerShape(DS.RadiusL)
     Row(
-        modifier.clip(shape).background(Color(0x0FFFFFFF)).border(1.dp, Color(0x14FFFFFF), shape).padding(horizontal = 18.dp, vertical = 12.dp),
+        modifier.clip(shape).background(Color(0x0FFFFFFF)).border(1.dp, Color(0x14FFFFFF), shape)
+            .padding(horizontal = 18.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(20.dp)
     ) {
         Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(5.dp)) {
             if (e == null || ch == null) {
                 Text("TV-Guide", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
-                Text("Wähle eine Sendung mit den Pfeiltasten, OK schaltet auf den Sender.", color = PT.T2, fontSize = 14.sp)
+                Text(
+                    "Wähle eine Sendung mit den Pfeiltasten, OK schaltet auf den Sender.",
+                    color = PT.T2,
+                    fontSize = 14.sp
+                )
                 Text("Zurück: zum Sender, dann zur Kategorie, dann schließen.", color = Muted, fontSize = 13.sp)
                 return@Column
             }
@@ -457,26 +649,71 @@ private fun GuideDetailPanel(e: EpgEntry?, ch: Item?, nowSec: Long, modifier: Mo
             }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    status, color = if (isNow) OnAccent else Tok.TextMid, fontSize = 13.sp, fontWeight = FontWeight.ExtraBold,
-                    modifier = Modifier.clip(RoundedCornerShape(DS.RadiusXs)).background(if (isNow) Accent1 else Color(0x2EFFFFFF)).padding(horizontal = 8.dp, vertical = 3.dp)
+                    status,
+                    color = if (isNow) OnAccent else Tok.TextMid,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    modifier = Modifier.clip(RoundedCornerShape(DS.RadiusXs))
+                        .background(if (isNow) Accent1 else Color(0x2EFFFFFF))
+                        .padding(horizontal = 8.dp, vertical = 3.dp)
                 )
-                Text(raw = true, text = ch.title, color = PT.T2, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                Text(raw = true, text = "·  ${hhmm(e.start)} – ${hhmm(e.end)}", color = PT.T2, fontSize = 13.sp, style = TNUM, maxLines = 1)
+                Text(
+                    raw = true,
+                    text = ch.title,
+                    color = PT.T2,
+                    fontSize = 13.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+                Text(
+                    raw = true,
+                    text = "·  ${hhmm(e.start)} – ${hhmm(e.end)}",
+                    color = PT.T2,
+                    fontSize = 13.sp,
+                    style = TNUM,
+                    maxLines = 1
+                )
                 Text("·  ${(e.end - e.start) / 60} Min", color = PT.T2, fontSize = 13.sp, maxLines = 1)
                 if (Reminders.isSet(ch.id, e.start)) AppIcon(AIcon.Bell, Accent2, size = 14.dp)
             }
-            Text(raw = true, text = e.title, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                raw = true,
+                text = e.title,
+                color = Color.White,
+                fontSize = 22.sp,
+                fontWeight = FontWeight.ExtraBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
             if (isNow) {
                 val frac = ((nowSec - e.start).toFloat() / (e.end - e.start).coerceAtLeast(1)).coerceIn(0f, 1f)
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
                     Box(Modifier.weight(1f).height(4.dp).clip(RoundedCornerShape(50)).background(DS.Overlay3)) {
                         Box(Modifier.fillMaxWidth(frac).fillMaxHeight().background(Accent1))
                     }
-                    Text("noch ${((e.end - nowSec) / 60).coerceAtLeast(0)} Min", color = Accent2, fontSize = 13.sp, fontWeight = FontWeight.Bold, style = TNUM)
+                    Text(
+                        "noch ${((e.end - nowSec) / 60).coerceAtLeast(0)} Min",
+                        color = Accent2,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        style = TNUM
+                    )
                 }
             }
             // The whole width belongs to the description (the "Next shows" column was dropped at the user's request)
-            if (e.desc.isNotBlank()) Text(raw = true, text = e.desc, color = DS.TextSoft, fontSize = 14.sp, lineHeight = 19.sp, maxLines = 4, overflow = TextOverflow.Ellipsis)
+            if (e.desc.isNotBlank()) Text(
+                raw = true,
+                text = e.desc,
+                color = DS.TextSoft,
+                fontSize = 14.sp,
+                lineHeight = 19.sp,
+                maxLines = 4,
+                overflow = TextOverflow.Ellipsis
+            )
             Spacer(Modifier.weight(1f))
         }
     }
@@ -486,7 +723,12 @@ private fun GuideDetailPanel(e: EpgEntry?, ch: Item?, nowSec: Long, modifier: Mo
 private fun guideOkAction(e: EpgEntry?, ch: Item?, nowSec: Long): String {
     if (e == null || ch == null) return "Ansehen / Erinnerung"
     return when {
-        ReminderLogic.canRemind(e.start, nowSec) -> if (Reminders.isSet(ch.id, e.start)) "Erinnerung löschen" else "Erinnerung setzen"
+        ReminderLogic.canRemind(e.start, nowSec) -> if (Reminders.isSet(
+                ch.id,
+                e.start
+            )
+        ) "Erinnerung löschen" else "Erinnerung setzen"
+
         e.end <= nowSec && Catchup.canPlay(ch, e, nowSec) -> "Aus dem Archiv ansehen"
         else -> "Ansehen"
     }
@@ -494,9 +736,22 @@ private fun guideOkAction(e: EpgEntry?, ch: Item?, nowSec: Long): String {
 
 @Composable
 private fun GuideRow(
-    ch: Item, current: Boolean, winStart: () -> Long, viewMin: Int, dpm: Float, nowSec: Long, rowH: Dp, hidePast: Boolean,
-    cellReq: FocusRequester, onInfo: (EpgEntry?) -> Unit, onShift: (EpgEntry) -> Unit, onRowFocus: (EpgEntry?) -> Unit,
-    onBlock: (Boolean, FocusRequester) -> Unit, onClose: () -> Unit, onArchive: (EpgEntry) -> Unit, onPick: () -> Unit
+    ch: Item,
+    current: Boolean,
+    winStart: () -> Long,
+    viewMin: Int,
+    dpm: Float,
+    nowSec: Long,
+    rowH: Dp,
+    hidePast: Boolean,
+    cellReq: FocusRequester,
+    onInfo: (EpgEntry?) -> Unit,
+    onShift: (EpgEntry) -> Unit,
+    onRowFocus: (EpgEntry?) -> Unit,
+    onBlock: (Boolean, FocusRequester) -> Unit,
+    onClose: () -> Unit,
+    onArchive: (EpgEntry) -> Unit,
+    onPick: () -> Unit
 ) {
     val scope = rememberCoroutineScope()
     val ctx = LocalContext.current
@@ -513,7 +768,16 @@ private fun GuideRow(
     }
     // "Hide past" leaves shows in the archive: they can still be watched
     val entries = remember(raw, hidePast, cu) {
-        cleanEpg(raw.orEmpty()).let { l -> if (hidePast) l.filter { it.end > nowSec || CatchupLogic.canPlay(cu, it.start, it.end, nowSec) } else l }
+        cleanEpg(raw.orEmpty()).let { l ->
+            if (hidePast) l.filter {
+                it.end > nowSec || CatchupLogic.canPlay(
+                    cu,
+                    it.start,
+                    it.end,
+                    nowSec
+                )
+            } else l
+        }
     }
     val blockReqs = remember(entries) { HashMap<Long, FocusRequester>() }
     // The time window is read as a lambda: moving it only shifts the row content (placement), the shows are not recomposed.
@@ -537,18 +801,32 @@ private fun GuideRow(
                     }
                 }
                 .onPreviewKeyEvent { ev ->
-                    if (ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionLeft) { onClose(); true } else false
+                    if (ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionLeft) {
+                        onClose(); true
+                    } else false
                 }
                 .clickable(onClick = onPick)
                 .padding(horizontal = 10.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Box(Modifier.size(38.dp).clip(RoundedCornerShape(DS.RadiusXs)).background(DS.Overlay2), contentAlignment = Alignment.Center) {
-                if (ch.logo != null) AsyncImage(ch.logo, null, Modifier.fillMaxSize().padding(3.dp), contentScale = ContentScale.Fit)
+            Box(
+                Modifier.size(38.dp).clip(RoundedCornerShape(DS.RadiusXs)).background(DS.Overlay2),
+                contentAlignment = Alignment.Center
+            ) {
+                if (ch.logo != null) AsyncImage(
+                    ch.logo,
+                    null,
+                    Modifier.fillMaxSize().padding(3.dp),
+                    contentScale = ContentScale.Fit
+                )
             }
             Text(
-                ch.title, color = Color.White, fontSize = 14.sp,
-                fontWeight = if (current || f) FontWeight.ExtraBold else FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis
+                ch.title,
+                color = Color.White,
+                fontSize = 14.sp,
+                fontWeight = if (current || f) FontWeight.ExtraBold else FontWeight.Medium,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
             )
         }
         Box(Modifier.weight(1f).fillMaxHeight().clipToBounds()) {
@@ -558,101 +836,361 @@ private fun GuideRow(
                 modifier = Modifier.padding(start = 8.dp).align(Alignment.CenterStart)
             )
             Box(Modifier.fillMaxSize().offset { IntOffset(-((winStart() - origin) / 60f * dpm).dp.roundToPx(), 0) }) {
-            shown.forEach { e ->
-                key(e.start) {
-                    val x = (e.start - origin) / 60f * dpm
-                    val w = ((e.end - e.start) / 60f * dpm - 3f).coerceIn(3f, 6000f)
-                    val isNow = nowSec >= e.start && nowSec < e.end
-                    val past = e.end <= nowSec
-                    var bf by remember { mutableStateOf(false) }
-                    val reminded = Reminders.isSet(ch.id, e.start)
-                    val inArchive = past && CatchupLogic.canPlay(cu, e.start, e.end, nowSec)
-                    val dw = if (bf) maxOf(w, 200f) else w
-                    val frac = if (isNow) ((nowSec - e.start).toFloat() / (e.end - e.start)).coerceIn(0f, 1f) else 0f
-                    val req = blockReqs.getOrPut(e.start) { FocusRequester() }
-                    val blockShape = RoundedCornerShape(DS.RadiusS)
-                    Box(
-                        Modifier.offset(x = x.dp).zIndex(if (bf) 2f else 0f).width(dw.dp).fillMaxHeight().clip(blockShape)
-                            .then(
-                                // All fields opaque (round 14): the selected show becomes wider and lies over its neighbors –
-                                // semi-transparent, the texts of short shows would overlap
-                                if (bf) Modifier.background(Brush.horizontalGradient(listOf(lerp(BlockBase, Accent1, .62f), lerp(BlockBase, Accent1, .42f))))
-                                else if (isNow) Modifier.background(lerp(BlockBase, Accent1, .16f))
-                                else Modifier.background(if (past && !inArchive) BlockPast else BlockBase)
-                            )
-                            .border(if (bf) 2.dp else 1.dp, if (bf) Accent1 else if (isNow) lerp(BlockBase, Accent1, .40f) else BlockLine, blockShape)
-                            .focusRequester(req)
-                            .onPreviewKeyEvent { ev ->
-                                // Seek keys: one day back/forward (quickly to older shows in the archive)
-                                if (ev.type == KeyEventType.KeyDown && (ev.key == Key.MediaRewind || ev.key == Key.MediaFastForward)) {
-                                    val want = e.start + (if (ev.key == Key.MediaFastForward) 86400L else -86400L)
-                                    val target = entries.minByOrNull { kotlin.math.abs(it.start - want) }
-                                    if (target != null && target.start != e.start) {
-                                        onShift(target)
-                                        scope.launch {
-                                            androidx.compose.runtime.withFrameNanos { }
-                                            androidx.compose.runtime.withFrameNanos { }
-                                            runCatching { blockReqs[target.start]?.requestFocus() }
+                shown.forEach { e ->
+                    key(e.start) {
+                        val x = (e.start - origin) / 60f * dpm
+                        val w = ((e.end - e.start) / 60f * dpm - 3f).coerceIn(3f, 6000f)
+                        val isNow = nowSec >= e.start && nowSec < e.end
+                        val past = e.end <= nowSec
+                        var bf by remember { mutableStateOf(false) }
+                        val reminded = Reminders.isSet(ch.id, e.start)
+                        val inArchive = past && CatchupLogic.canPlay(cu, e.start, e.end, nowSec)
+                        val dw = if (bf) maxOf(w, 200f) else w
+                        val frac =
+                            if (isNow) ((nowSec - e.start).toFloat() / (e.end - e.start)).coerceIn(0f, 1f) else 0f
+                        val req = blockReqs.getOrPut(e.start) { FocusRequester() }
+                        val blockShape = RoundedCornerShape(DS.RadiusS)
+                        Box(
+                            Modifier.offset(x = x.dp).zIndex(if (bf) 2f else 0f).width(dw.dp).fillMaxHeight()
+                                .clip(blockShape)
+                                .then(
+                                    // All fields opaque (round 14): the selected show becomes wider and lies over its neighbors –
+                                    // semi-transparent, the texts of short shows would overlap
+                                    if (bf) Modifier.background(
+                                        Brush.horizontalGradient(
+                                            listOf(
+                                                lerp(
+                                                    BlockBase,
+                                                    Accent1,
+                                                    .62f
+                                                ), lerp(BlockBase, Accent1, .42f)
+                                            )
+                                        )
+                                    )
+                                    else if (isNow) Modifier.background(lerp(BlockBase, Accent1, .16f))
+                                    else Modifier.background(if (past && !inArchive) BlockPast else BlockBase)
+                                )
+                                .border(
+                                    if (bf) 2.dp else 1.dp,
+                                    if (bf) Accent1 else if (isNow) lerp(BlockBase, Accent1, .40f) else BlockLine,
+                                    blockShape
+                                )
+                                .focusRequester(req)
+                                .onPreviewKeyEvent { ev ->
+                                    // Seek keys: one day back/forward (quickly to older shows in the archive)
+                                    if (ev.type == KeyEventType.KeyDown && (ev.key == Key.MediaRewind || ev.key == Key.MediaFastForward)) {
+                                        val want = e.start + (if (ev.key == Key.MediaFastForward) 86400L else -86400L)
+                                        val target = entries.minByOrNull { kotlin.math.abs(it.start - want) }
+                                        if (target != null && target.start != e.start) {
+                                            onShift(target)
+                                            scope.launch {
+                                                androidx.compose.runtime.withFrameNanos { }
+                                                androidx.compose.runtime.withFrameNanos { }
+                                                runCatching { blockReqs[target.start]?.requestFocus() }
+                                            }
                                         }
+                                        return@onPreviewKeyEvent true
                                     }
-                                    return@onPreviewKeyEvent true
-                                }
-                                if (ev.type == KeyEventType.KeyDown && (ev.key == Key.DirectionRight || ev.key == Key.DirectionLeft)) {
-                                    val i = entries.indexOfFirst { it.start == e.start }
-                                    val ni = i + (if (ev.key == Key.DirectionRight) 1 else -1)
-                                    if (ni < 0) { runCatching { cellReq.requestFocus() } }
-                                    else if (ni <= entries.lastIndex) {
-                                        val target = entries[ni]
-                                        onShift(target)
-                                        scope.launch {
-                                            androidx.compose.runtime.withFrameNanos { }
-                                            androidx.compose.runtime.withFrameNanos { }
-                                            runCatching { blockReqs[target.start]?.requestFocus() }
+                                    if (ev.type == KeyEventType.KeyDown && (ev.key == Key.DirectionRight || ev.key == Key.DirectionLeft)) {
+                                        val i = entries.indexOfFirst { it.start == e.start }
+                                        val ni = i + (if (ev.key == Key.DirectionRight) 1 else -1)
+                                        if (ni < 0) {
+                                            runCatching { cellReq.requestFocus() }
+                                        } else if (ni <= entries.lastIndex) {
+                                            val target = entries[ni]
+                                            onShift(target)
+                                            scope.launch {
+                                                androidx.compose.runtime.withFrameNanos { }
+                                                androidx.compose.runtime.withFrameNanos { }
+                                                runCatching { blockReqs[target.start]?.requestFocus() }
+                                            }
                                         }
-                                    }
-                                    true
-                                } else false
-                            }
-                            .onFocusChanged { bf = it.isFocused; if (it.isFocused) { onBlock(true, cellReq); onInfo(e); onShift(e) } }
-                            // Later show: OK sets/deletes the reminder (round 14: without a selection window);
-                            // in the archive: play the show; otherwise watch the channel
-                            .clickable {
-                                val n = System.currentTimeMillis() / 1000
-                                if (ReminderLogic.canRemind(e.start, n)) {
-                                    val on = Reminders.toggle(ctx, Reminder(ch.id, ch.title, e.title, e.start, e.end))
-                                    if (on) Reminders.askPermission(ctx as? android.app.Activity)
-                                    android.widget.Toast.makeText(
-                                        ctx,
-                                        if (on) Lang.tr("Erinnerung gesetzt – ${Reminders.leadMin} Min vorher") else Lang.tr("Erinnerung gelöscht"),
-                                        android.widget.Toast.LENGTH_SHORT
-                                    ).show()
+                                        true
+                                    } else false
                                 }
-                                else if (e.end <= n && CatchupLogic.canPlay(cu, e.start, e.end, n)) onArchive(e)
-                                else onPick()
-                            }
-                            .padding(horizontal = 8.dp, vertical = 4.dp),
-                        contentAlignment = Alignment.CenterStart
-                    ) {
-                        if (reminded) AppIcon(AIcon.Bell, if (bf) Color.White else Accent2, Modifier.align(Alignment.TopEnd), 13.dp)
-                        if (inArchive && dw >= 30f) AppIcon(AIcon.Catchup, if (bf) Color.White else Accent2, Modifier.align(Alignment.TopEnd), 13.dp)
-                        // Design: title on top, time below
-                        if (dw >= 44f) Column {
-                            if (dw >= 72f) Text(
-                                e.title, color = if (past && !inArchive && !bf) Color(0xFF9AA0B2) else Color.White,
-                                fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, raw = true
+                                .onFocusChanged {
+                                    bf = it.isFocused; if (it.isFocused) {
+                                    onBlock(true, cellReq); onInfo(e); onShift(e)
+                                }
+                                }
+                                // Later show: OK sets/deletes the reminder (round 14: without a selection window);
+                                // in the archive: play the show; otherwise watch the channel
+                                .clickable {
+                                    val n = System.currentTimeMillis() / 1000
+                                    if (ReminderLogic.canRemind(e.start, n)) {
+                                        val on =
+                                            Reminders.toggle(ctx, Reminder(ch.id, ch.title, e.title, e.start, e.end))
+                                        if (on) Reminders.askPermission(ctx as? android.app.Activity)
+                                        android.widget.Toast.makeText(
+                                            ctx,
+                                            if (on) Lang.tr("Erinnerung gesetzt – ${Reminders.leadMin} Min vorher") else Lang.tr(
+                                                "Erinnerung gelöscht"
+                                            ),
+                                            android.widget.Toast.LENGTH_SHORT
+                                        ).show()
+                                    } else if (e.end <= n && CatchupLogic.canPlay(cu, e.start, e.end, n)) onArchive(e)
+                                    else onPick()
+                                }
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                            contentAlignment = Alignment.CenterStart
+                        ) {
+                            if (reminded) AppIcon(
+                                AIcon.Bell,
+                                if (bf) Color.White else Accent2,
+                                Modifier.align(Alignment.TopEnd),
+                                13.dp
                             )
-                            Text(
-                                raw = true, text = hhmm(e.start) + " – " + hhmm(e.end), color = if (bf) Color(0xE6FFFFFF) else Muted,
-                                fontSize = 13.sp, style = TNUM, maxLines = 1
+                            if (inArchive && dw >= 30f) AppIcon(
+                                AIcon.Catchup,
+                                if (bf) Color.White else Accent2,
+                                Modifier.align(Alignment.TopEnd),
+                                13.dp
+                            )
+                            // Design: title on top, time below
+                            if (dw >= 44f) Column {
+                                if (dw >= 72f) Text(
+                                    e.title,
+                                    color = if (past && !inArchive && !bf) Color(0xFF9AA0B2) else Color.White,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    raw = true
+                                )
+                                Text(
+                                    raw = true,
+                                    text = hhmm(e.start) + " – " + hhmm(e.end),
+                                    color = if (bf) Color(0xE6FFFFFF) else Muted,
+                                    fontSize = 13.sp,
+                                    style = TNUM,
+                                    maxLines = 1
+                                )
+                            }
+                            if (isNow) Box(
+                                Modifier.align(Alignment.BottomStart).height(3.dp).width((dw * frac).dp)
+                                    .background(if (bf) Color.White else Accent1)
                             )
                         }
-                        if (isNow) Box(Modifier.align(Alignment.BottomStart).height(3.dp).width((dw * frac).dp).background(if (bf) Color.White else Accent1))
                     }
                 }
-            }
-            // "Now" line: moves with the row content, the clipping hides it outside the window
-            Box(Modifier.offset(x = ((nowSec - origin) / 60f * dpm).dp).width(2.dp).fillMaxHeight().background(Accent2.copy(alpha = 0.8f)))
+                // "Now" line: moves with the row content, the clipping hides it outside the window
+                Box(
+                    Modifier.offset(x = ((nowSec - origin) / 60f * dpm).dp).width(2.dp).fillMaxHeight()
+                        .background(Accent2.copy(alpha = 0.8f))
+                )
             }
         }
     }
 }
+
+@Composable
+private fun MobileGuideChannelRow(
+    item: Item,
+    isCur: Boolean,
+    nowSec: Long,
+    onClick: () -> Unit
+) {
+    val epg by produceState(emptyList<EpgEntry>(), item.id) { value = Epg.now(item) }
+    val nowE = Epg.current(epg)
+    val shape = RoundedCornerShape(12.dp)
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(if (isCur) Color(0x38FFFFFF) else Color(0x18FFFFFF))
+            .border(1.dp, if (isCur) Color(0x88FFFFFF) else Color(0x15FFFFFF), shape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 10.dp)
+    ) {
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
+                if (item.logo != null) AsyncImage(
+                    item.logo,
+                    item.title,
+                    Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Fit
+                )
+                else Text(
+                    raw = true,
+                    text = item.title.take(3).uppercase(),
+                    color = Color.White,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                if (Library.isFav(item.id)) AppIcon(AIcon.Star, DS.Gold, Modifier.align(Alignment.TopEnd), 12.dp)
+            }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        raw = true,
+                        text = item.title,
+                        color = Color.White,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    if (isCur) PChip("LIVE", filled = true)
+                }
+                if (nowE != null) {
+                    Text(
+                        raw = true,
+                        text = nowE.title,
+                        color = Color(0xFFD0D0D6),
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        raw = true,
+                        text = hhmm(nowE.start) + " – " + hhmm(nowE.end),
+                        color = Color(0xFFA0A0A8),
+                        fontSize = 11.sp,
+                        maxLines = 1
+                    )
+                } else {
+                    Text("Live", color = Color(0xFFA0A0A8), fontSize = 12.sp, maxLines = 1)
+                }
+            }
+            AppIcon(AIcon.Play, if (isCur) Accent1 else Color(0x88FFFFFF), size = 20.dp)
+        }
+        if (nowE != null) {
+            Spacer(Modifier.height(6.dp))
+            val frac = ((nowSec - nowE.start).toFloat() / (nowE.end - nowE.start).coerceAtLeast(1)).coerceIn(0f, 1f)
+            Box(Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(50)).background(Color(0x22FFFFFF))) {
+                Box(Modifier.fillMaxWidth(frac).fillMaxHeight().background(if (isCur) Accent1 else Color.White))
+            }
+        }
+    }
+}
+
+@Composable
+private fun MobilePortraitGuide(
+    curId: String,
+    cats: List<GuideCat>,
+    catIdx: Int,
+    onCatIdx: (Int) -> Unit,
+    shown: List<Item>,
+    nowSec: Long,
+    onClose: () -> Unit,
+    onSearch: () -> Unit,
+    onPick: (Item) -> Unit
+) {
+    val ls = key(catIdx) { rememberLazyListState(maxOf(shown.indexOfFirst { it.id == curId } - 1, 0)) }
+    Column(
+        Modifier
+            .fillMaxSize()
+    ) {
+        // 1. Transparent 16:9 top window: Live TV is running directly behind this area!
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(16f / 9f)
+        ) {
+            // Overlay controls over the running video
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(Color(0x88000000))
+                        .clickable { onClose() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    AppIcon(AIcon.Left, Color.White, size = 18.dp)
+                }
+                Spacer(Modifier.width(12.dp))
+                Text(
+                    text = "Live TV · TV Guide",
+                    color = Color.White,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(Modifier.weight(1f))
+                Box(
+                    Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(Color(0x88000000))
+                        .clickable { onSearch() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    AppIcon(AIcon.Edit, Color.White, size = 16.dp)
+                }
+            }
+        }
+
+        // 2. Below the video: category pills and channels list running below!
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .background(Color(0xFF000000))
+                .padding(horizontal = 14.dp, vertical = 6.dp)
+        ) {
+            // Category pills row
+            LazyRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                itemsIndexed(cats) { ci, c ->
+                    val isCur = ci == catIdx
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .background(if (isCur) Color.White else Color(0x24FFFFFF))
+                            .clickable { onCatIdx(ci) }
+                            .padding(horizontal = 14.dp, vertical = 6.dp)
+                    ) {
+                        Text(
+                            text = Lang.tr(c.name) + " (${c.items.size})",
+                            color = if (isCur) Color.Black else Color.White,
+                            fontSize = 12.sp,
+                            fontWeight = if (isCur) FontWeight.Bold else FontWeight.Medium
+                        )
+                    }
+                }
+            }
+
+            // Channel list with live show info & progress bar
+            if (shown.isEmpty()) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(Lang.tr("Keine Sender"), color = Muted, fontSize = 14.sp)
+                }
+            } else {
+                LazyColumn(
+                    state = ls,
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 28.dp)
+                ) {
+                    itemsIndexed(shown, key = { _, it -> it.id }) { _, item ->
+                        MobileGuideChannelRow(
+                            item = item,
+                            isCur = item.id == curId,
+                            nowSec = nowSec,
+                            onClick = { onPick(item) }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+

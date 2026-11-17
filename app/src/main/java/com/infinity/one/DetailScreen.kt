@@ -702,19 +702,38 @@ private fun DetailScreenFull(
                             }
                         }
                         }
-                        if (item.kind == Kind.MOVIE && movieAlts.size > 1) Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                            // Choose the source explicitly (takes precedence over quality) or automatically to suit the device
-                            val so = listOf("Automatisch") + movieVars.map { it.label }
-                            DropdownPill("Quelle", prefLabel ?: "Automatisch", so, so.indexOf(prefLabel).coerceAtLeast(0), active = prefLabel != null) {
-                                prefLabel = if (it == 0) null else so[it]; save()
-                            }
-                            if (movieQs.size > 1 && prefLabel == null) {
-                                val qo = listOf("Automatisch (passend zum Gerät)") + movieQs
-                                DropdownPill("Qualität", prefQ ?: "Automatisch", qo, qo.indexOf(prefQ).coerceAtLeast(0), active = prefQ != null) {
-                                    prefQ = if (it == 0) null else qo[it]; save()
+                        if (item.kind == Kind.MOVIE && movieAlts.size > 1) {
+                            if (isPhonePortrait) {
+                                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        val so = listOf("Automatisch") + movieVars.map { it.label }
+                                        DropdownPill("Quelle", prefLabel ?: "Automatisch", so, so.indexOf(prefLabel).coerceAtLeast(0), active = prefLabel != null) {
+                                            prefLabel = if (it == 0) null else so[it]; save()
+                                        }
+                                        if (movieQs.size > 1 && prefLabel == null) {
+                                            val qo = listOf("Automatisch (passend zum Gerät)") + movieQs
+                                            DropdownPill("Qualität", prefQ ?: "Automatisch", qo, qo.indexOf(prefQ).coerceAtLeast(0), active = prefQ != null) {
+                                                prefQ = if (it == 0) null else qo[it]; save()
+                                            }
+                                        }
+                                    }
+                                    Text("${movieAlts.size} Quellen · bei Störung wird automatisch gewechselt", color = Muted, fontSize = 12.sp)
+                                }
+                            } else {
+                                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    val so = listOf("Automatisch") + movieVars.map { it.label }
+                                    DropdownPill("Quelle", prefLabel ?: "Automatisch", so, so.indexOf(prefLabel).coerceAtLeast(0), active = prefLabel != null) {
+                                        prefLabel = if (it == 0) null else so[it]; save()
+                                    }
+                                    if (movieQs.size > 1 && prefLabel == null) {
+                                        val qo = listOf("Automatisch (passend zum Gerät)") + movieQs
+                                        DropdownPill("Qualität", prefQ ?: "Automatisch", qo, qo.indexOf(prefQ).coerceAtLeast(0), active = prefQ != null) {
+                                            prefQ = if (it == 0) null else qo[it]; save()
+                                        }
+                                    }
+                                    Text("${movieAlts.size} Quellen · bei Störung wird automatisch gewechselt", color = Muted, fontSize = 13.sp)
                                 }
                             }
-                            Text("${movieAlts.size} Quellen · bei Störung wird automatisch gewechselt", color = Muted, fontSize = 13.sp)
                         }
                         if (item.kind != Kind.SERIES && DeadLinks.isDead(item.url)) IconLabel(
                             AIcon.Warning,
@@ -752,14 +771,14 @@ private fun DetailScreenFull(
                             ) {
                                 if (dirList.isNotEmpty()) {
                                     Row(horizontalArrangement = Arrangement.spacedBy(dpx(8)), verticalAlignment = Alignment.CenterVertically) {
-                                        Text(Lang.tr("Regie") + ":", color = Color.White.copy(alpha = 0.65f), fontSize = spx(14), fontWeight = FontWeight.Medium)
-                                        Text(dirList.joinToString(", "), color = Color.White, fontSize = spx(14), fontWeight = FontWeight.SemiBold)
+                                        Text(Lang.tr("Regie") + ":", color = Color.White.copy(alpha = 0.65f), fontSize = if (isPhonePortrait) 13.sp else spx(14), fontWeight = FontWeight.Medium)
+                                        Text(dirList.joinToString(", "), color = Color.White, fontSize = if (isPhonePortrait) 13.sp else spx(14), fontWeight = FontWeight.SemiBold)
                                     }
                                 }
                                 if (castList.isNotEmpty()) {
-                                    Row(horizontalArrangement = Arrangement.spacedBy(dpx(8)), verticalAlignment = Alignment.CenterVertically) {
-                                        Text(Lang.tr("Besetzung") + ":", color = Color.White.copy(alpha = 0.65f), fontSize = spx(14), fontWeight = FontWeight.Medium)
-                                        Text(castList.take(8).joinToString(", "), color = Color.White, fontSize = spx(14), fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Row(horizontalArrangement = Arrangement.spacedBy(dpx(8)), verticalAlignment = Alignment.Top) {
+                                        Text(Lang.tr("Besetzung") + ":", color = Color.White.copy(alpha = 0.65f), fontSize = if (isPhonePortrait) 13.sp else spx(14), fontWeight = FontWeight.Medium)
+                                        Text(castList.take(8).joinToString(", "), color = Color.White, fontSize = if (isPhonePortrait) 13.sp else spx(14), fontWeight = FontWeight.SemiBold, maxLines = if (isPhonePortrait) 2 else 1, overflow = TextOverflow.Ellipsis)
                                     }
                                 }
                             }

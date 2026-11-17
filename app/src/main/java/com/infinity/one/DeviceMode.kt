@@ -47,5 +47,8 @@ object DeviceMode {
     fun isPortrait(): Boolean = isPortrait(LocalConfiguration.current)
 
     @Composable
+    fun isTablet(): Boolean = currentFormFactor() == FormFactor.TABLET
+
+    @Composable
     fun isPhonePortrait(): Boolean = isPhonePortrait(LocalContext.current, LocalConfiguration.current)
 }

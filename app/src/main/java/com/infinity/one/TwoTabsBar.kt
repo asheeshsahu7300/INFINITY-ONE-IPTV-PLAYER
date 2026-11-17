@@ -20,11 +20,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /**
- * Modern floating Two-Tabs navigation architecture for Phone (portrait):
- * 1. Upper Pill: Category Navigation (Live TV, Movie, Series, Favourite)
+ * Modern floating Two-Tabs navigation architecture inspired by JioHotstar / Prime Video for Phone:
+ * 1. Upper Pill: Category Navigation (Live TV, Movies, Series, Favorites)
  * 2. Lower Pill: Primary Navigation (Home, Search, My Space, Settings)
  *
- * Uses [navigationBarsPadding] to ensure the bar sits cleanly above system gesture handles.
+ * Uses [navigationBarsPadding] with comfortable clearance so it never collides with gesture bars.
  */
 @Composable
 fun TwoTabsBar(
@@ -38,7 +38,7 @@ fun TwoTabsBar(
             .fillMaxWidth()
             .navigationBarsPadding()
             .padding(horizontal = 16.dp)
-            .padding(bottom = 10.dp),
+            .padding(bottom = 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
@@ -68,19 +68,12 @@ private fun UpperCategoryPill(
 
     Box(
         modifier = Modifier
-            .shadow(16.dp, RoundedCornerShape(50), ambientColor = Color.Black, spotColor = Color.Black)
+            .shadow(22.dp, RoundedCornerShape(50), ambientColor = Color.Black, spotColor = Color.Black)
             .clip(RoundedCornerShape(50))
-            .background(
-                Brush.horizontalGradient(
-                    listOf(
-                        Color(0xF618162A),
-                        Color(0xF82C1F45),
-                        Color(0xF618162A)
-                    )
-                )
-            )
-            .border(1.dp, Color(0x35FFFFFF), RoundedCornerShape(50))
-            .padding(horizontal = 6.dp, vertical = 3.dp)
+            .background(Color(0xF0141414))
+            .border(1.dp, Color(0x30FFFFFF), RoundedCornerShape(50))
+            .padding(horizontal = 6.dp, vertical = 5.dp)
+            .clickable(enabled = false) { }
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -92,25 +85,25 @@ private fun UpperCategoryPill(
                 Box(
                     modifier = Modifier
                         .clip(itemShape)
-                        .background(if (isSelected) Color(0x38FFFFFF) else Color.Transparent)
+                        .background(if (isSelected) Color.White else Color.Transparent)
                         .clickable { onSelect(tabId) }
-                        .padding(horizontal = 14.dp, vertical = 6.dp),
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = label,
-                        color = if (isSelected) Color.White else Color(0xBBFFFFFF),
-                        fontSize = 12.sp,
+                        color = if (isSelected) Color.Black else Color.White,
+                        fontSize = 13.5.sp,
                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
                     )
                 }
 
-                if (index < categories.size - 1) {
+                if (index < categories.size - 1 && !isSelected && activeTab != categories[index + 1].first) {
                     Box(
                         modifier = Modifier
                             .width(1.dp)
                             .height(14.dp)
-                            .background(Color(0x22FFFFFF))
+                            .background(Color(0x25FFFFFF))
                     )
                 }
             }
@@ -125,7 +118,7 @@ private fun LowerNavigationPill(
 ) {
     // Lower Navigation: Home (0), Search (4), My Space (8), Settings (5)
     val items = listOf(
-        NavPillItem(0, Lang.tr("Home"), AIcon.Sparkle, 0),
+        NavPillItem(0, Lang.tr("Home"), AIcon.Sparkle, -1),
         NavPillItem(4, Lang.tr("Suche"), null, 4),
         NavPillItem(8, Lang.tr("My Space"), AIcon.Person, -1),
         NavPillItem(5, Lang.tr("Einstellungen"), AIcon.Gear, 5)
@@ -133,18 +126,12 @@ private fun LowerNavigationPill(
 
     Box(
         modifier = Modifier
-            .shadow(24.dp, RoundedCornerShape(50), ambientColor = Color.Black, spotColor = Color.Black)
+            .shadow(32.dp, RoundedCornerShape(50), ambientColor = Color.Black, spotColor = Color.Black)
             .clip(RoundedCornerShape(50))
-            .background(
-                Brush.verticalGradient(
-                    listOf(
-                        Color(0xFA151424),
-                        Color(0xFE0C0B14)
-                    )
-                )
-            )
-            .border(1.dp, Color(0x35FFFFFF), RoundedCornerShape(50))
-            .padding(horizontal = 8.dp, vertical = 5.dp)
+            .background(Color(0xF2121212))
+            .border(1.dp, Color(0x30FFFFFF), RoundedCornerShape(50))
+            .padding(horizontal = 8.dp, vertical = 6.dp)
+            .clickable(enabled = false) { }
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -152,7 +139,7 @@ private fun LowerNavigationPill(
         ) {
             items.forEach { item ->
                 val isSelected = when (item.id) {
-                    0 -> activeTab == 0
+                    0 -> activeTab in listOf(0, 1, 2, 3)
                     4 -> activeTab == 4
                     8 -> activeTab in listOf(7, 8, 9) // My Space includes Favorites, My List, History
                     5 -> activeTab == 5
@@ -165,25 +152,21 @@ private fun LowerNavigationPill(
                         .clip(itemShape)
                         .background(if (isSelected) Color(0x30FFFFFF) else Color.Transparent)
                         .clickable { onSelect(item.id) }
-                        .padding(horizontal = 14.dp, vertical = 5.dp),
+                        .padding(horizontal = 18.dp, vertical = 8.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
-                    val tint = when {
-                        isSelected && item.id == 0 -> Color(0xFFFFD54F) // Amber gold glow for active home
-                        isSelected -> Color.White
-                        else -> Color(0x99FFFFFF)
-                    }
+                    val tint = if (isSelected) Color.White else Color(0x88FFFFFF)
                     if (item.menuIconId >= 0) {
-                        MenuIcon(item.menuIconId, tint, Modifier.size(20.dp))
+                        MenuIcon(item.menuIconId, tint, Modifier.size(22.dp))
                     } else if (item.icon != null) {
-                        AppIcon(item.icon, tint, size = 20.dp)
+                        AppIcon(item.icon, tint, size = 22.dp)
                     }
-                    Spacer(Modifier.height(2.dp))
+                    Spacer(Modifier.height(3.dp))
                     Text(
                         text = item.label,
-                        color = if (isSelected) Color.White else Color(0x88FFFFFF),
-                        fontSize = 11.sp,
+                        color = tint,
+                        fontSize = 11.5.sp,
                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                     )
                 }

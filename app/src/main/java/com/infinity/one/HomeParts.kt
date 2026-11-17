@@ -132,17 +132,22 @@ fun cardBackdrop(url: String): String = url.replace("/t/p/w1280/", "/t/p/w780/")
 fun HeroMetaLine(item: Item, m: Meta?, dots: Boolean = false, centered: Boolean = false) {
     val isPhone = DeviceMode.isPhonePortrait()
     val parts = ArrayList<Pair<String, Boolean>>()   // text, raw (do not translate)
-    // Image 1: „2016 | Abenteuer | 1h 47min | ★ 7.6“; image 2: „Drama · 2023 · 2 Staffeln“
     val g = cleanGenre(m?.cleanGenres?.firstOrNull() ?: m?.genres?.firstOrNull())
     val y = cleanYear(m?.year) ?: cleanYear(item.year)
     if (dots) g?.let { parts.add(it to true) }
     y?.let { parts.add(it to true) }
     if (!dots) g?.let { parts.add(it to true) }
     if (item.kind == Kind.SERIES) {
-        val s = seriesCountText(item).takeIf { it.isNotBlank() }
-        if (s != null) parts.add(s to false)
+        val sc = seasonCount(item)
+        val ec = item.episodes.size
+        if (sc > 0) parts.add(Lang.tr(seasonsText(item)) to false)
+        if (ec > 0) parts.add(Lang.tr(if (ec == 1) "1 Episode" else "$ec Episoden") to false)
     } else {
         m?.runtime?.takeIf { it > 0 }?.let { parts.add((if (it >= 60) "${it / 60}h ${it % 60}min" else "$it min") to true) }
+    }
+    if (dots && m != null) {
+        val score = m.imdbRating ?: m.rating?.let { String.format(java.util.Locale.US, "%.1f", it) }
+        if (score != null) parts.add("★ $score" to true)
     }
     Row(
         modifier = if (centered) Modifier.fillMaxWidth() else Modifier,
@@ -154,7 +159,7 @@ fun HeroMetaLine(item: Item, m: Meta?, dots: Boolean = false, centered: Boolean 
                 if (dots) Box(Modifier.size(if (isPhone) 3.dp else dpx(4)).clip(CircleShape).background(Color(0x99FFFFFF)))
                 else Box(Modifier.width(1.dp).height(if (isPhone) 12.dp else dpx(16)).background(Color(0x66FFFFFF)))
             }
-            Text(p, color = Color(0xFFD4D4DA), fontSize = if (isPhone) 13.sp else spx(if (dots) 15 else 16), raw = raw, maxLines = 1)
+            Text(p, color = Color(0xFFD4D4DA), fontSize = if (isPhone) 13.sp else spx(if (dots) 15 else 16), raw = raw, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         if (!dots && m != null && (m.imdbRating != null || m.rtRating != null || m.rating != null)) {
             if (parts.isNotEmpty()) Box(Modifier.width(1.dp).height(if (isPhone) 12.dp else dpx(16)).background(Color(0x66FFFFFF)))
@@ -281,12 +286,25 @@ fun RowTitle(
     rowState: LazyListState? = null,
     onAll: (() -> Unit)?
 ) {
+    val isPhone = DeviceMode.isPhonePortrait()
     Row(
-        Modifier.fillMaxWidth().padding(start = dpx(29), end = dpx(28), top = dpx(28)),
+        Modifier.fillMaxWidth().padding(
+            start = if (isPhone) 16.dp else dpx(29),
+            end = if (isPhone) 16.dp else dpx(28),
+            top = if (isPhone) 20.dp else dpx(28)
+        ),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(title, color = Color.White, fontSize = spx(25), fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f), raw = raw)
+        Text(
+            title,
+            color = Color.White,
+            fontSize = if (isPhone) 20.sp else spx(25),
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+            raw = raw
+        )
         if (onAll != null) {
             var f by remember { mutableStateOf(false) }
             val shape = RoundedCornerShape(50)
@@ -344,11 +362,21 @@ fun RowTitle(
                     }
                     .trackFocus()
                     .clickable(onClick = onAll)
-                    .padding(horizontal = dpx(10), vertical = dpx(4)),
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(dpx(10))
+                    .padding(horizontal = if (isPhone) 12.dp else dpx(10), vertical = if (isPhone) 6.dp else dpx(4)),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(if (isPhone) 6.dp else dpx(10))
             ) {
-                Text("Alle anzeigen", color = if (f) DS.FocusInk else SoftInk, fontSize = spx(16))
-                AppIcon(AIcon.Right, if (f) DS.FocusInk else SoftInk, size = dpx(15))
+                Text(
+                    "Alle anzeigen",
+                    color = if (f) DS.FocusInk else if (isPhone) Color.White else SoftInk,
+                    fontSize = if (isPhone) 15.sp else spx(16),
+                    fontWeight = if (isPhone) FontWeight.SemiBold else FontWeight.Normal
+                )
+                AppIcon(
+                    AIcon.Right,
+                    if (f) DS.FocusInk else if (isPhone) Color.White else SoftInk,
+                    size = if (isPhone) 16.dp else dpx(15)
+                )
             }
         }
     }
@@ -479,40 +507,43 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.tileArt(id: Int, c:
 @Composable
 fun ChannelNowCard(item: Item, modifier: Modifier, onClick: () -> Unit) {
     val ctx = LocalContext.current
+    val isPhone = DeviceMode.isPhonePortrait()
     var f by remember { mutableStateOf(false) }
     val s by animateFloatAsState(if (f) focusScale(1.06f) else 1f, animationSpec = tween(120), label = "chnow")
     val border by animateColorAsState(if (f) Color.White else CardLine, animationSpec = tween(120), label = "chb")
-    val shape = RoundedCornerShape(dpx(10))
+    val shape = RoundedCornerShape(if (isPhone) 12.dp else dpx(10))
     val epg by produceState(emptyList<EpgEntry>(), item.id) { value = Epg.now(item) }
     val nowE = Epg.current(epg)
     Column(
-        modifier.height(dpx(110)).graphicsLayer { scaleX = s; scaleY = s }.focusGlow(f, shape).clip(shape)
+        modifier
+            .height(if (isPhone) 74.dp else dpx(110))
+            .graphicsLayer { scaleX = s; scaleY = s }.focusGlow(f, shape).clip(shape)
             .background(if (f) Color(0xFF1E1E24) else CardBg)
             .border(if (f) 2.dp else 1.dp, border, shape)
             .onFocusChanged { f = it.isFocused }
             .trackFocus()
             .favKeys { Library.toggleFav(ctx, item.id) }
             .clickable(onClick = onClick)
-            .padding(start = dpx(14), end = dpx(14), top = dpx(12), bottom = dpx(10))
+            .padding(horizontal = if (isPhone) 12.dp else dpx(14), vertical = if (isPhone) 8.dp else dpx(10))
     ) {
         // Logo left, all texts left-aligned to its right: channel, what is on now, start and end time
-        Row(Modifier.weight(1f).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(dpx(12))) {
-            Box(Modifier.size(dpx(58)), contentAlignment = Alignment.Center) {
+        Row(Modifier.weight(1f).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(if (isPhone) 10.dp else dpx(12))) {
+            Box(Modifier.size(if (isPhone) 36.dp else dpx(58)), contentAlignment = Alignment.Center) {
                 if (item.logo != null) AsyncImage(item.logo, item.title, Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
-                else Text(raw = true, text = item.title.take(3).uppercase(), color = Color.White, fontSize = spx(22), fontWeight = FontWeight.ExtraBold)
-                if (Library.isFav(item.id)) AppIcon(AIcon.Star, DS.Gold, Modifier.align(Alignment.TopEnd), dpx(14))
+                else Text(raw = true, text = item.title.take(3).uppercase(), color = Color.White, fontSize = if (isPhone) 13.sp else spx(22), fontWeight = FontWeight.ExtraBold)
+                if (Library.isFav(item.id)) AppIcon(AIcon.Star, DS.Gold, Modifier.align(Alignment.TopEnd), if (isPhone) 12.dp else dpx(14))
             }
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(dpx(2))) {
-                Text(raw = true, text = item.title, color = Color.White, fontSize = spx(15), fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(if (isPhone) 1.dp else dpx(2))) {
+                Text(raw = true, text = item.title, color = Color.White, fontSize = if (isPhone) 13.sp else spx(15), fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (nowE != null) {
-                    Text(raw = true, text = nowE.title, color = Color(0xFFD0D0D6), fontSize = spx(13), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(raw = true, text = hhmm(nowE.start) + " – " + hhmm(nowE.end), color = Color(0xFFA0A0A8), fontSize = spx(13), maxLines = 1)
-                } else Text("Live", color = Color(0xFFA0A0A8), fontSize = spx(13), maxLines = 1)
+                    Text(raw = true, text = nowE.title, color = Color(0xFFD0D0D6), fontSize = if (isPhone) 11.sp else spx(13), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(raw = true, text = hhmm(nowE.start) + " – " + hhmm(nowE.end), color = Color(0xFFA0A0A8), fontSize = if (isPhone) 10.sp else spx(13), maxLines = 1)
+                } else Text("Live", color = Color(0xFFA0A0A8), fontSize = if (isPhone) 11.sp else spx(13), maxLines = 1)
             }
         }
-        Spacer(Modifier.height(dpx(8)))
+        Spacer(Modifier.height(if (isPhone) 4.dp else dpx(8)))
         val frac = if (nowE == null) 0f else ((System.currentTimeMillis() / 1000 - nowE.start).toFloat() / (nowE.end - nowE.start).coerceAtLeast(1)).coerceIn(0f, 1f)
-        Box(Modifier.fillMaxWidth().height(dpx(3)).clip(RoundedCornerShape(50)).background(Color(0x26FFFFFF))) {
+        Box(Modifier.fillMaxWidth().height(if (isPhone) 3.dp else dpx(3)).clip(RoundedCornerShape(50)).background(Color(0x26FFFFFF))) {
             Box(Modifier.fillMaxWidth(frac).fillMaxHeight().background(Accent1))
         }
     }
@@ -654,7 +685,7 @@ fun CardRow(
                     else false
                 }.onFocusChanged { st -> if (st.hasFocus) cur = i }
                 when {
-                    it.kind == Kind.LIVE -> ChannelNowCard(it, track.width(g.chan).then(fr)) { onOpen(it) }
+                    it.kind == Kind.LIVE -> ChannelNowCard(it, track.width(if (DeviceMode.isPhonePortrait()) 220.dp else g.chan).then(fr)) { onOpen(it) }
                     style == CARD_LAND -> LandscapeCard(it, track.width(g.land).restoreFocus(it.id).then(fr)) { onOpen(it) }
                     else -> RowPosterCard(it, g.poster, track.restoreFocus(it.id).then(fr), overlay = 3, expand = true) { onOpen(it) }
                 }

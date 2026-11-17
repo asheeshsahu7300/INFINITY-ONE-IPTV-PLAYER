@@ -34,7 +34,8 @@ enum class AIcon {
     Sparkle, Music, Tag, Live, Download, Person, Lock, Storage, Pulse, Backspace, History,
     Tomato, Rewind, FastForward, Catchup, Eye, EyeOff, Globe,
     // Round 14
-    Edit, Heart, HeartFilled, Sliders, Layers
+    Edit, Heart, HeartFilled, Sliders, Layers,
+    Fullscreen, FullscreenExit
 }
 
 @Composable
@@ -299,6 +300,18 @@ private fun DrawScope.drawAIcon(icon: AIcon, c: Color) {
         AIcon.Layers -> {
             poly(c, u, 2f, true, 12f, 4f, 21f, 9f, 12f, 14f, 3f, 9f)
             poly(c, u, 2f, false, 3f, 13f, 12f, 18f, 21f, 13f)
+        }
+        AIcon.Fullscreen -> {
+            poly(c, u, 2.2f, false, 8f, 4f, 4f, 4f, 4f, 8f)
+            poly(c, u, 2.2f, false, 16f, 4f, 20f, 4f, 20f, 8f)
+            poly(c, u, 2.2f, false, 4f, 16f, 4f, 20f, 8f, 20f)
+            poly(c, u, 2.2f, false, 16f, 20f, 20f, 20f, 20f, 16f)
+        }
+        AIcon.FullscreenExit -> {
+            poly(c, u, 2.2f, false, 4f, 8f, 8f, 8f, 8f, 4f)
+            poly(c, u, 2.2f, false, 20f, 8f, 16f, 8f, 16f, 4f)
+            poly(c, u, 2.2f, false, 4f, 16f, 8f, 16f, 8f, 20f)
+            poly(c, u, 2.2f, false, 20f, 16f, 16f, 16f, 16f, 20f)
         }
     }
 }
