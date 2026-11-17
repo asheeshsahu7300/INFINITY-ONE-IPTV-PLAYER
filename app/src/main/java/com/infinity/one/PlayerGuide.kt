@@ -271,11 +271,11 @@ fun Guide(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                        MenuIcon(3, Accent1, Modifier.size(30.dp))
+                        MenuIcon(3, Color.White, Modifier.size(30.dp))
                         Column(Modifier.weight(1f)) {
-                            Text("TV-Guide", color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.ExtraBold)
+                            Text(Lang.tr("TV-Guide"), color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.ExtraBold)
                             Text(
-                                "Live TV · Jetzt und in den nächsten Stunden",
+                                Lang.tr("Live TV · Jetzt und in den nächsten Stunden"),
                                 color = Muted,
                                 fontSize = 13.sp,
                                 maxLines = 1
@@ -496,7 +496,6 @@ fun Guide(
                     }
                 }
             }
-        }
         // Key hints (TV only)
         if (!isPhone) {
             Row(
@@ -504,16 +503,17 @@ fun Guide(
                 horizontalArrangement = Arrangement.spacedBy(20.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                GuideHint(null, "Sendungen", AIcon.Left, AIcon.Right)
-                GuideHint(null, "Sender", AIcon.Up, AIcon.Down)
+                GuideHint(null, Lang.tr("Sendungen"), AIcon.Left, AIcon.Right)
+                GuideHint(null, Lang.tr("Sender"), AIcon.Up, AIcon.Down)
                 // What OK does on the selected show (before a button in the detail field that was dropped for long texts)
                 val okText = guideOkAction(infoE, infoItem, nowSec)
                 GuideHint("OK", okText)
-                if (pastDays > 0) GuideHint(null, "1 Tag", AIcon.Rewind, AIcon.FastForward)
-                GuideHint("Zurück", "Sender, Kategorie, schließen")
+                if (pastDays > 0) GuideHint(null, "1 " + Lang.tr("Tag"), AIcon.Rewind, AIcon.FastForward)
+                GuideHint(Lang.tr("Zurück"), Lang.tr("Sender, Kategorie, schließen"))
             }
         }
     }
+}
 
 /** Opaque colors of the show fields (no transparency, see GuideRow). */
 private val BlockBase = Color(0xFF1C202B)
