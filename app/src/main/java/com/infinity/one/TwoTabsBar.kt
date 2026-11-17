@@ -60,10 +60,10 @@ private fun UpperCategoryPill(
 ) {
     // Upper Categories: Live TV (3), Movie (1), Series (2), Favourite (7)
     val categories = listOf(
-        3 to "Live TV",
-        1 to "Filme",
-        2 to "Serien",
-        7 to "Favoriten"
+        3 to Lang.tr("Live TV"),
+        1 to Lang.tr("Filme"),
+        2 to Lang.tr("Serien"),
+        7 to Lang.tr("Favoriten")
     )
 
     Box(
@@ -80,7 +80,7 @@ private fun UpperCategoryPill(
                 )
             )
             .border(1.dp, Color(0x35FFFFFF), RoundedCornerShape(50))
-            .padding(horizontal = 6.dp, vertical = 4.dp)
+            .padding(horizontal = 6.dp, vertical = 3.dp)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -94,13 +94,13 @@ private fun UpperCategoryPill(
                         .clip(itemShape)
                         .background(if (isSelected) Color(0x38FFFFFF) else Color.Transparent)
                         .clickable { onSelect(tabId) }
-                        .padding(horizontal = 14.dp, vertical = 7.dp),
+                        .padding(horizontal = 14.dp, vertical = 6.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = label,
                         color = if (isSelected) Color.White else Color(0xBBFFFFFF),
-                        fontSize = 13.sp,
+                        fontSize = 12.sp,
                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
                     )
                 }
@@ -125,10 +125,10 @@ private fun LowerNavigationPill(
 ) {
     // Lower Navigation: Home (0), Search (4), My Space (8), Settings (5)
     val items = listOf(
-        NavPillItem(0, "Home", AIcon.Sparkle, 0),
-        NavPillItem(4, "Suche", null, 4),
-        NavPillItem(8, "My Space", AIcon.Person, -1),
-        NavPillItem(5, "Einstellungen", AIcon.Gear, 5)
+        NavPillItem(0, Lang.tr("Home"), AIcon.Sparkle, 0),
+        NavPillItem(4, Lang.tr("Suche"), null, 4),
+        NavPillItem(8, Lang.tr("My Space"), AIcon.Person, -1),
+        NavPillItem(5, Lang.tr("Einstellungen"), AIcon.Gear, 5)
     )
 
     Box(

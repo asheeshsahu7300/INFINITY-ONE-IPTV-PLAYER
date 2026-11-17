@@ -65,7 +65,7 @@
         android:allowBackup="false"
         android:usesCleartextTraffic="true"
         android:largeHeap="true"
-        android:theme="@android:style/Theme.Material.NoActionBar">
+        android:theme="@style/Theme.InfinityOne">
         <activity
             android:name=".MainActivity"
             android:exported="true"

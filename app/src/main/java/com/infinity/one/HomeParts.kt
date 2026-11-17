@@ -129,7 +129,8 @@ fun cardBackdrop(url: String): String = url.replace("/t/p/w1280/", "/t/p/w780/")
 
 /** "2016 | Abenteuer | 1h 47min | ★ 7.6" as in the design draft. */
 @Composable
-fun HeroMetaLine(item: Item, m: Meta?, dots: Boolean = false) {
+fun HeroMetaLine(item: Item, m: Meta?, dots: Boolean = false, centered: Boolean = false) {
+    val isPhone = DeviceMode.isPhonePortrait()
     val parts = ArrayList<Pair<String, Boolean>>()   // text, raw (do not translate)
     // Image 1: „2016 | Abenteuer | 1h 47min | ★ 7.6“; image 2: „Drama · 2023 · 2 Staffeln“
     val g = cleanGenre(m?.cleanGenres?.firstOrNull() ?: m?.genres?.firstOrNull())
@@ -143,16 +144,20 @@ fun HeroMetaLine(item: Item, m: Meta?, dots: Boolean = false) {
     } else {
         m?.runtime?.takeIf { it > 0 }?.let { parts.add((if (it >= 60) "${it / 60}h ${it % 60}min" else "$it min") to true) }
     }
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(dpx(14))) {
+    Row(
+        modifier = if (centered) Modifier.fillMaxWidth() else Modifier,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = if (centered) Arrangement.Center else Arrangement.spacedBy(if (isPhone) 8.dp else dpx(14))
+    ) {
         parts.forEachIndexed { i, (p, raw) ->
             if (i > 0) {
-                if (dots) Box(Modifier.size(dpx(4)).clip(CircleShape).background(Color(0x99FFFFFF)))
-                else Box(Modifier.width(1.dp).height(dpx(16)).background(Color(0x66FFFFFF)))
+                if (dots) Box(Modifier.size(if (isPhone) 3.dp else dpx(4)).clip(CircleShape).background(Color(0x99FFFFFF)))
+                else Box(Modifier.width(1.dp).height(if (isPhone) 12.dp else dpx(16)).background(Color(0x66FFFFFF)))
             }
-            Text(p, color = Color(0xFFD4D4DA), fontSize = spx(if (dots) 15 else 16), raw = raw, maxLines = 1)
+            Text(p, color = Color(0xFFD4D4DA), fontSize = if (isPhone) 13.sp else spx(if (dots) 15 else 16), raw = raw, maxLines = 1)
         }
         if (!dots && m != null && (m.imdbRating != null || m.rtRating != null || m.rating != null)) {
-            if (parts.isNotEmpty()) Box(Modifier.width(1.dp).height(dpx(16)).background(Color(0x66FFFFFF)))
+            if (parts.isNotEmpty()) Box(Modifier.width(1.dp).height(if (isPhone) 12.dp else dpx(16)).background(Color(0x66FFFFFF)))
             ScoreRow(m, 17)
         }
     }

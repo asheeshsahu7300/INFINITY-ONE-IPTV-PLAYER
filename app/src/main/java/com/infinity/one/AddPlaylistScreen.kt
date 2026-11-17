@@ -182,15 +182,23 @@ fun AddPlaylistScreen(onDone: () -> Unit) {
                 FocusButton("Xtream-Login", primary = xtream && !stalker, compact = true) { xtream = true; stalker = false }
                 FocusButton("Stalker-Portal", primary = stalker, compact = true) { stalker = true; xtream = false }
             }
+            val isPhone = DeviceMode.isPhonePortrait()
             if (stalker) {
                 Field(portal, { portal = it }, "Portal-Adresse (z. B. http://portal.tld:8080/c/)")
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Field(mac, { mac = it }, "MAC-Adresse", Modifier.weight(1f))
-                    Field(sn, { sn = it }, "Seriennummer (optional)", Modifier.weight(1f))
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Field(devId, { devId = it }, "Device ID (optional)", Modifier.weight(1f))
-                    Field(devId2, { devId2 = it }, "Device ID 2 (optional)", Modifier.weight(1f))
+                if (isPhone) {
+                    Field(mac, { mac = it }, "MAC-Adresse")
+                    Field(sn, { sn = it }, "Seriennummer (optional)")
+                    Field(devId, { devId = it }, "Device ID (optional)")
+                    Field(devId2, { devId2 = it }, "Device ID 2 (optional)")
+                } else {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Field(mac, { mac = it }, "MAC-Adresse", Modifier.weight(1f))
+                        Field(sn, { sn = it }, "Seriennummer (optional)", Modifier.weight(1f))
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Field(devId, { devId = it }, "Device ID (optional)", Modifier.weight(1f))
+                        Field(devId2, { devId2 = it }, "Device ID 2 (optional)", Modifier.weight(1f))
+                    }
                 }
                 Text("Seriennummer und Device IDs nur eintragen, wenn dein Anbieter sie verlangt (wie bei TiviMate oder STB Emu). Leer = die App erzeugt eigene Werte.", color = Muted, fontSize = 12.sp, lineHeight = 16.sp)
             } else if (!xtream) {
@@ -208,9 +216,14 @@ fun AddPlaylistScreen(onDone: () -> Unit) {
                 }
             } else {
                 Field(host, { host = it }, "Server (z. B. http://server.tld:8080)")
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Field(user, { user = it }, "Benutzername", Modifier.weight(1f))
-                    Field(pass, { pass = it }, "Passwort", Modifier.weight(1f), password = !showPass)
+                if (isPhone) {
+                    Field(user, { user = it }, "Benutzername")
+                    Field(pass, { pass = it }, "Passwort", password = !showPass)
+                } else {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Field(user, { user = it }, "Benutzername", Modifier.weight(1f))
+                        Field(pass, { pass = it }, "Passwort", Modifier.weight(1f), password = !showPass)
+                    }
                 }
                 Row(Modifier.padding(horizontal = 8.dp, vertical = 5.dp)) {
                     FocusButton(if (showPass) "Passwort verbergen" else "Passwort anzeigen", compact = true) { showPass = !showPass }
@@ -222,21 +235,36 @@ fun AddPlaylistScreen(onDone: () -> Unit) {
                 Text(BACKUP_HINT, color = Muted, fontSize = 15.sp)
             }
             PlaylistStore.error?.let { Text(it, color = DS.Danger, fontSize = 14.sp, lineHeight = 18.sp) }
-            Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp, vertical = 5.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                FocusButton(if (PlaylistStore.loading) "Lade…" else "Hinzufügen", primary = true, compact = true) {
-                    if (PlaylistStore.loading) return@FocusButton
-                    val finalUrl = if (stalker) StalkerLogic.source(portal, mac, sn, devId, devId2)?.encode() else if (xtream) PlaylistStore.xtreamUrl(host, user, pass) else url
-                    if (finalUrl == null) PlaylistStore.error = if (stalker) "Angaben unvollständig: Portal-Adresse und MAC-Adresse (z. B. 00:1A:79:12:34:56) nötig." else "Angaben unvollständig: Server, Benutzername und Passwort nötig."
-                    else if (xtream && !stalker && !backupsValid(backups)) PlaylistStore.error = BACKUP_INVALID
-                    else {
-                        if (xtream && !stalker) PlaylistStore.setBackups(ctx, finalUrl, backups.toList())
-                        scope.launch { if (PlaylistStore.load(ctx, finalUrl, true)) onDone() }
+            if (isPhone) {
+                Column(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    FocusButton(if (PlaylistStore.loading) "Lade…" else "Hinzufügen", Modifier.fillMaxWidth(), primary = true, compact = false) {
+                        if (PlaylistStore.loading) return@FocusButton
+                        val finalUrl = if (stalker) StalkerLogic.source(portal, mac, sn, devId, devId2)?.encode() else if (xtream) PlaylistStore.xtreamUrl(host, user, pass) else url
+                        if (finalUrl == null) PlaylistStore.error = if (stalker) "Angaben unvollständig: Portal-Adresse und MAC-Adresse (z. B. 00:1A:79:12:34:56) nötig." else "Angaben unvollständig: Server, Benutzername und Passwort nötig."
+                        else if (xtream && !stalker && !backupsValid(backups)) PlaylistStore.error = BACKUP_INVALID
+                        else {
+                            if (xtream && !stalker) PlaylistStore.setBackups(ctx, finalUrl, backups.toList())
+                            scope.launch { if (PlaylistStore.load(ctx, finalUrl, true)) onDone() }
+                        }
                     }
+                    if (canCancel) FocusButton("Abbrechen", Modifier.fillMaxWidth(), compact = false) { PlaylistStore.clearPending(ctx); onDone() }
+                    else FocusButton("Weiter ohne Playlist", Modifier.fillMaxWidth(), compact = false) { PlaylistStore.clearPending(ctx); PlaylistStore.error = null; DemoMode.enter(); onDone() }
                 }
-                if (canCancel) FocusButton("Abbrechen", compact = true) { PlaylistStore.clearPending(ctx); onDone() }
-                // Nothing to add yet (first start): demo mode with sample entries and neutral placeholders, so the UI can be explored.
-                // Settings then offer "Playlist hinzufügen" to leave it.
-                else FocusButton("Weiter ohne Playlist", compact = true) { PlaylistStore.clearPending(ctx); PlaylistStore.error = null; DemoMode.enter(); onDone() }
+            } else {
+                Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp, vertical = 5.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    FocusButton(if (PlaylistStore.loading) "Lade…" else "Hinzufügen", primary = true, compact = true) {
+                        if (PlaylistStore.loading) return@FocusButton
+                        val finalUrl = if (stalker) StalkerLogic.source(portal, mac, sn, devId, devId2)?.encode() else if (xtream) PlaylistStore.xtreamUrl(host, user, pass) else url
+                        if (finalUrl == null) PlaylistStore.error = if (stalker) "Angaben unvollständig: Portal-Adresse und MAC-Adresse (z. B. 00:1A:79:12:34:56) nötig." else "Angaben unvollständig: Server, Benutzername und Passwort nötig."
+                        else if (xtream && !stalker && !backupsValid(backups)) PlaylistStore.error = BACKUP_INVALID
+                        else {
+                            if (xtream && !stalker) PlaylistStore.setBackups(ctx, finalUrl, backups.toList())
+                            scope.launch { if (PlaylistStore.load(ctx, finalUrl, true)) onDone() }
+                        }
+                    }
+                    if (canCancel) FocusButton("Abbrechen", compact = true) { PlaylistStore.clearPending(ctx); onDone() }
+                    else FocusButton("Weiter ohne Playlist", compact = true) { PlaylistStore.clearPending(ctx); PlaylistStore.error = null; DemoMode.enter(); onDone() }
+                }
             }
             // Second device? Take everything over in one step
             Text("Schon ein anderes Gerät mit INFINITY ONE? Spiele die Sicherung ein: Playlists, Zugangsdaten, Verlauf, Favoriten und Einstellungen sind danach sofort da.", color = Muted, fontSize = 12.sp, lineHeight = 16.sp)

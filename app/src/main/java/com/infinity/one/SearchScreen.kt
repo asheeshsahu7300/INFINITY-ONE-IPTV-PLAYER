@@ -167,14 +167,14 @@ fun SearchScreen(
                     .padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Text("Suche", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                Text(Lang.tr("Suche"), color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
                 Field(
-                    SearchState.query, { SearchState.query = it.take(60) }, "Filme, Serien oder Sender suchen…",
+                    SearchState.query, { SearchState.query = it.take(60) }, Lang.tr("Filme, Serien oder Sender suchen…"),
                     Modifier.fillMaxWidth(),
                     onDone = { SearchState.query.trim().takeIf { it.length >= 2 }?.let { AppSettings.addSearch(ctx, it) } }
                 )
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    SEARCH_FILTERS.forEachIndexed { i, name -> MiniChip(name, SearchState.filter == i) { SearchState.filter = i } }
+                    SEARCH_FILTERS.forEachIndexed { i, name -> MiniChip(Lang.tr(name), SearchState.filter == i) { SearchState.filter = i } }
                 }
                 val recent = AppSettings.searchHistory.toList().take(4)
                 if (recent.isNotEmpty()) FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -193,41 +193,41 @@ fun SearchScreen(
                         val hs = hist.filter { it.kind == Kind.SERIES }
                         val hl = hist.filter { it.kind == Kind.LIVE }
                         if (hm.isNotEmpty()) item(key = "hm") {
-                            SearchRow("Zuletzt geschaut · Filme", hm.take(30), cardW, onOpen) {
+                            SearchRow(Lang.tr("Zuletzt geschaut · Filme"), hm.take(30), cardW, onOpen) {
                                 onBrowse(BrowseReq("Zuletzt geschaut · Filme", hm, S_SORT_PLAYLIST))
                             }
                         }
                         if (hs.isNotEmpty()) item(key = "hs") {
-                            SearchRow("Zuletzt geschaut · Serien", hs.take(30), cardW, onOpen) {
+                            SearchRow(Lang.tr("Zuletzt geschaut · Serien"), hs.take(30), cardW, onOpen) {
                                 onBrowse(BrowseReq("Zuletzt geschaut · Serien", hs, S_SORT_PLAYLIST))
                             }
                         }
                         if (hl.isNotEmpty()) item(key = "hl") {
-                            SearchRow("Zuletzt geschaut · Live TV", hl.take(30), cardW, onOpen) {
+                            SearchRow(Lang.tr("Zuletzt geschaut · Live TV"), hl.take(30), cardW, onOpen) {
                                 onBrowse(BrowseReq("Zuletzt geschaut · Live TV", hl, S_SORT_PLAYLIST))
                             }
                         }
                     } else {
                         val openS: (Item) -> Unit = { i -> AppSettings.addSearch(ctx, q); onOpen(i) }
                         if (searching) item {
-                            Text("Suche …", color = Muted, fontSize = 16.sp, modifier = Modifier.padding(vertical = 16.dp))
+                            Text(Lang.tr("Suche …"), color = Muted, fontSize = 16.sp, modifier = Modifier.padding(vertical = 16.dp))
                         } else if (rm.isEmpty() && rs.isEmpty() && rl.isEmpty()) item {
                             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                                EmptyState(AIcon.Info, "Keine Treffer", "Prüfe die Schreibweise oder suche nach einem Teil des Titels.")
+                                EmptyState(AIcon.Info, Lang.tr("Keine Treffer"), Lang.tr("Prüfe die Schreibweise oder suche nach einem Teil des Titels."))
                             }
                         }
                         if (rm.isNotEmpty()) item(key = "rm") {
-                            SearchRow("Filme", rm, cardW, openS, null) {
+                            SearchRow(Lang.tr("Filme"), rm, cardW, openS, null) {
                                 AppSettings.addSearch(ctx, q); onBrowse(BrowseReq("Suche „$q“ · Filme", rm, S_SORT_AZ))
                             }
                         }
                         if (rs.isNotEmpty()) item(key = "rs") {
-                            SearchRow("Serien", rs, cardW, openS, null) {
+                            SearchRow(Lang.tr("Serien"), rs, cardW, openS, null) {
                                 AppSettings.addSearch(ctx, q); onBrowse(BrowseReq("Suche „$q“ · Serien", rs, S_SORT_AZ))
                             }
                         }
                         if (rl.isNotEmpty()) item(key = "rl") {
-                            SearchRow("Live TV", rl, cardW, openS, null) {
+                            SearchRow(Lang.tr("Live TV"), rl, cardW, openS, null) {
                                 AppSettings.addSearch(ctx, q); onBrowse(BrowseReq("Suche „$q“ · Live TV", rl, S_SORT_AZ))
                             }
                         }
@@ -379,7 +379,7 @@ private fun SearchRowHeader(title: String, count: Int, headerReq: FocusRequester
     val isPhone = DeviceMode.isPhonePortrait()
     if (isPhone) {
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp),
+            Modifier.fillMaxWidth().padding(horizontal = 0.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -460,6 +460,7 @@ private fun SearchRow(
     val headerReq = remember { FocusRequester() }
     val firstCard = firstReq ?: remember { FocusRequester() }
     val report = LocalSearchFocus.current
+    val isPhone = DeviceMode.isPhonePortrait()
     Column {
         SearchRowHeader(title, list.size, headerReq, firstCard, rowState, onAll)
         Box(
@@ -471,15 +472,19 @@ private fun SearchRow(
         ) {
             LazyRow(
                 state = rowState,
-                contentPadding = PaddingValues(horizontal = DS.PageX, vertical = 18.dp),
-                horizontalArrangement = Arrangement.spacedBy(18.dp)
+                contentPadding = PaddingValues(horizontal = if (isPhone) 0.dp else DS.PageX, vertical = if (isPhone) 6.dp else 18.dp),
+                horizontalArrangement = Arrangement.spacedBy(if (isPhone) 10.dp else 18.dp)
             ) {
                 itemsIndexed(list.take(60)) { i, x ->
                     val fr = (if (i == 0) Modifier.focusRequester(firstCard) else Modifier).onFocusChanged { if (it.hasFocus) report(x) }
-                    if (x.kind == Kind.LIVE) LiveCard(x, { onOpen(x) }, Modifier.width((cardW * 4 / 3).dp).then(fr))
-                    else PosterCard(x, { onOpen(x) }, Modifier.width(cardW.dp).restoreFocus(x.id).then(fr))
+                    val w = if (isPhone) (if (x.kind == Kind.LIVE) 160.dp else 120.dp) else (if (x.kind == Kind.LIVE) (cardW * 4 / 3).dp else cardW.dp)
+                    if (x.kind == Kind.LIVE) LiveCard(x, { onOpen(x) }, Modifier.width(w).then(fr))
+                    else PosterCard(x, { onOpen(x) }, Modifier.width(w).restoreFocus(x.id).then(fr))
                 }
-                item { SearchAllTile(liveRow, if (liveRow) (cardW * 4 / 3).dp else cardW.dp, onAll) }
+                item {
+                    val w = if (isPhone) (if (liveRow) 160.dp else 120.dp) else (if (liveRow) (cardW * 4 / 3).dp else cardW.dp)
+                    SearchAllTile(liveRow, w, onAll)
+                }
             }
         }
     }

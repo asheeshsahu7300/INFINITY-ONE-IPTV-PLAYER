@@ -376,14 +376,14 @@ fun HomeScreen(
     val header: @Composable (Modifier) -> Unit = { m ->
         if (isPhonePortrait) {
             val title = when (tab) {
-                0 -> "For You"
-                1 -> "Filme"
-                2 -> "Serien"
-                3 -> "Live TV"
-                7 -> "Favoriten"
-                8 -> "My Space"
-                4 -> "Suche"
-                5 -> "Einstellungen"
+                0 -> Lang.tr("For You")
+                1 -> Lang.tr("Filme")
+                2 -> Lang.tr("Serien")
+                3 -> Lang.tr("Live TV")
+                7 -> Lang.tr("Favoriten")
+                8 -> Lang.tr("My Space")
+                4 -> Lang.tr("Suche")
+                5 -> Lang.tr("Einstellungen")
                 else -> "Infinity"
             }
             Row(
@@ -445,10 +445,10 @@ fun HomeScreen(
     }
     val liveLogos = nowChannels.mapNotNull { it.logo }.take(3)
     val tiles = listOf(
-        QuickTile("Live TV", "${live.size} Sender", 3, Color(0xFF6B3A0E), Color(0xFF2B1708), Color(0xFFF59E0B), logos = liveLogos) { onTab(3) },
-        QuickTile("Filme", "${movies.size} Filme", 1, Color(0xFF1E3A8A), Color(0xFF0F1B45), Color(0xFF60A5FA), image = tileImg[1]) { onTab(1) },
-        QuickTile("Serien", "${series.size} Serien", 2, Color(0xFF4C1D95), Color(0xFF22104A), Color(0xFFC084FC), image = tileImg[2]) { onTab(2) },
-        QuickTile("Favoriten", "Deine Auswahl", 7, Color(0xFF7F1D1D), Color(0xFF3A0B0B), Color(0xFFFB7185), image = tileImg[MenuLogic.FAVS]) { onTab(MenuLogic.FAVS) }
+        QuickTile(Lang.tr("Live TV"), "${live.size} " + Lang.tr("Sender"), 3, Color(0xFF6B3A0E), Color(0xFF2B1708), Color(0xFFF59E0B), logos = liveLogos) { onTab(3) },
+        QuickTile(Lang.tr("Filme"), "${movies.size} " + Lang.tr("Filme"), 1, Color(0xFF1E3A8A), Color(0xFF0F1B45), Color(0xFF60A5FA), image = tileImg[1]) { onTab(1) },
+        QuickTile(Lang.tr("Serien"), "${series.size} " + Lang.tr("Serien"), 2, Color(0xFF4C1D95), Color(0xFF22104A), Color(0xFFC084FC), image = tileImg[2]) { onTab(2) },
+        QuickTile(Lang.tr("Favoriten"), Lang.tr("Deine Auswahl"), 7, Color(0xFF7F1D1D), Color(0xFF3A0B0B), Color(0xFFFB7185), image = tileImg[MenuLogic.FAVS]) { onTab(MenuLogic.FAVS) }
     )
     DisposableEffect(Unit) { onDispose { HomeReturn.returning = true } }
 

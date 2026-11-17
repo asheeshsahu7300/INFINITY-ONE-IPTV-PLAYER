@@ -38,6 +38,9 @@ import coil.memory.MemoryCache
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        window.decorView.setBackgroundColor(android.graphics.Color.BLACK)
+        window.statusBarColor = android.graphics.Color.BLACK
+        window.navigationBarColor = android.graphics.Color.BLACK
         // Load settings early so colors and size are right in the very first frame.
         Profiles.init(this)
         Profiles.prewarm(this)

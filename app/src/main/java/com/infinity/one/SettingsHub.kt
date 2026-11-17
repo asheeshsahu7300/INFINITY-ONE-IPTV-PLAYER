@@ -11,6 +11,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -161,7 +163,12 @@ fun SettingsHub(onAdd: () -> Unit, reload: () -> Unit) {
 
     val isPhonePortrait = DeviceMode.isPhonePortrait()
     // No verticalScroll of its own: the settings tab sits in a LazyColumn that scrolls itself.
-    Column(Modifier.padding(horizontal = if (isPhonePortrait) 16.dp else DS.PageX, vertical = if (isPhonePortrait) 8.dp else dpx(20)), verticalArrangement = Arrangement.spacedBy(dpx(18))) {
+    Column(
+        Modifier
+            .padding(horizontal = if (isPhonePortrait) 16.dp else DS.PageX, vertical = if (isPhonePortrait) 8.dp else dpx(20))
+            .padding(bottom = if (isPhonePortrait) 140.dp else 0.dp),
+        verticalArrangement = Arrangement.spacedBy(if (isPhonePortrait) 12.dp else dpx(18))
+    ) {
         if (page < 0) {
             if (!isPhonePortrait) {
                 Column(verticalArrangement = Arrangement.spacedBy(dpx(4))) {
@@ -171,24 +178,24 @@ fun SettingsHub(onAdd: () -> Unit, reload: () -> Unit) {
             }
             Column(
                 modifier = Modifier.fillMaxWidth().widthIn(max = dpx(920)),
-                verticalArrangement = Arrangement.spacedBy(dpx(20))
+                verticalArrangement = Arrangement.spacedBy(if (isPhonePortrait) 14.dp else dpx(20))
             ) {
                 SETTING_CATEGORIES.forEach { cat ->
-                    Column(verticalArrangement = Arrangement.spacedBy(dpx(8))) {
+                    Column(verticalArrangement = Arrangement.spacedBy(if (isPhonePortrait) 6.dp else dpx(8))) {
                         Text(
                             categoryTitle(cat.key),
                             color = Accent2,
-                            fontSize = spx(18),
+                            fontSize = if (isPhonePortrait) 15.sp else spx(18),
                             fontWeight = FontWeight.ExtraBold,
-                            modifier = Modifier.padding(start = dpx(4), top = dpx(4))
+                            modifier = Modifier.padding(start = if (isPhonePortrait) 4.dp else dpx(4), top = if (isPhonePortrait) 4.dp else dpx(4))
                         )
                         Column(
                             Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(dpx(16)))
+                                .clip(RoundedCornerShape(if (isPhonePortrait) 14.dp else dpx(16)))
                                 .background(Color(0xFF0D0D10))
-                                .border(1.dp, Color(0x1AFFFFFF), RoundedCornerShape(dpx(16)))
-                                .padding(dpx(6)),
+                                .border(1.dp, Color(0x1AFFFFFF), RoundedCornerShape(if (isPhonePortrait) 14.dp else dpx(16)))
+                                .padding(if (isPhonePortrait) 4.dp else dpx(6)),
                             verticalArrangement = Arrangement.spacedBy(dpx(4))
                         ) {
                             cat.entries.forEach { entry ->
@@ -202,9 +209,9 @@ fun SettingsHub(onAdd: () -> Unit, reload: () -> Unit) {
                 }
             }
         } else {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(dpx(18))) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(if (isPhonePortrait) 12.dp else dpx(18))) {
                 SettingsBack(Modifier.focusRequester(backFocus)) { page = -1 }
-                Text(CATS[page].title, color = Color.White, fontSize = spx(36), fontWeight = FontWeight.ExtraBold)
+                Text(CATS[page].title, color = Color.White, fontSize = if (isPhonePortrait) 22.sp else spx(36), fontWeight = FontWeight.ExtraBold)
             }
             // Below the last selectable element there are often still hints: Down at the end brings them into view
             val fm = LocalFocusManager.current
@@ -216,8 +223,8 @@ fun SettingsHub(onAdd: () -> Unit, reload: () -> Unit) {
                         if (!fm.moveFocus(FocusDirection.Down)) endScope.launch { runCatching { endReq.bringIntoView() } }
                         true
                     } else false
-                }.fillMaxWidth().clip(RoundedCornerShape(dpx(18))).background(Color(0xFF0D0D10))
-                    .border(1.dp, Color(0x1AFFFFFF), RoundedCornerShape(dpx(18))).padding(dpx(26)),
+                }.fillMaxWidth().clip(RoundedCornerShape(if (isPhonePortrait) 16.dp else dpx(18))).background(Color(0xFF0D0D10))
+                    .border(1.dp, Color(0x1AFFFFFF), RoundedCornerShape(if (isPhonePortrait) 16.dp else dpx(18))).padding(if (isPhonePortrait) 16.dp else dpx(26)),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
             when (page) {
@@ -260,32 +267,33 @@ fun SettingsHub(onAdd: () -> Unit, reload: () -> Unit) {
 @Composable
 private fun SettingsRow(entry: SettingEntry, fr: FocusRequester, onClick: () -> Unit) {
     var f by remember { mutableStateOf(false) }
-    val shape = RoundedCornerShape(dpx(10))
+    val isPhone = DeviceMode.isPhonePortrait()
+    val shape = RoundedCornerShape(if (isPhone) 10.dp else dpx(10))
     Row(
         Modifier
             .fillMaxWidth()
-            .height(dpx(66))
+            .height(if (isPhone) 54.dp else dpx(66))
             .clip(shape)
             .background(if (f) Color(0x33FFFFFF) else Color.Transparent)
             .border(if (f) 2.dp else 0.dp, if (f) Color.White else Color.Transparent, shape)
             .onFocusChanged { f = it.isFocused }
             .trackFocus(fr)
             .clickable(onClick = onClick)
-            .padding(horizontal = dpx(18)),
+            .padding(horizontal = if (isPhone) 12.dp else dpx(18)),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(dpx(16))
+        horizontalArrangement = Arrangement.spacedBy(if (isPhone) 12.dp else dpx(16))
     ) {
         Box(
-            Modifier.size(dpx(40)).clip(CircleShape).background(if (f) Color.White else Color(0x18FFFFFF)),
+            Modifier.size(if (isPhone) 36.dp else dpx(40)).clip(CircleShape).background(if (f) Color.White else Color(0x18FFFFFF)),
             contentAlignment = Alignment.Center
         ) {
-            AppIcon(entry.icon, if (f) Color.Black else Color.White, size = dpx(22))
+            AppIcon(entry.icon, if (f) Color.Black else Color.White, size = if (isPhone) 20.dp else dpx(22))
         }
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(dpx(2))) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(if (isPhone) 1.dp else dpx(2))) {
             Text(
                 Lang.tr(entry.title),
                 color = Color.White,
-                fontSize = spx(18),
+                fontSize = if (isPhone) 15.sp else spx(18),
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -293,12 +301,12 @@ private fun SettingsRow(entry: SettingEntry, fr: FocusRequester, onClick: () -> 
             Text(
                 Lang.tr(entry.sub),
                 color = if (f) Color(0xFFDDDDDD) else Tok.TextLow,
-                fontSize = spx(13),
+                fontSize = if (isPhone) 12.sp else spx(13),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
         }
-        AppIcon(AIcon.Right, if (f) Color.White else Color(0x66FFFFFF), size = dpx(16))
+        AppIcon(AIcon.Right, if (f) Color.White else Color(0x66FFFFFF), size = if (isPhone) 14.dp else dpx(16))
     }
 }
 
@@ -306,14 +314,15 @@ private fun SettingsRow(entry: SettingEntry, fr: FocusRequester, onClick: () -> 
 @Composable
 private fun SettingsBack(modifier: Modifier, onClick: () -> Unit) {
     var f by remember { mutableStateOf(false) }
+    val isPhone = DeviceMode.isPhonePortrait()
     Box(
-        modifier.size(dpx(52)).clip(CircleShape)
+        modifier.size(if (isPhone) 38.dp else dpx(52)).clip(CircleShape)
             .background(if (f) DS.FocusFill else Tok.Glass)
             .border(1.dp, if (f) DS.FocusFill else Color(0x26FFFFFF), CircleShape)
             .onFocusChanged { f = it.isFocused }
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
-    ) { AppIcon(AIcon.Left, if (f) DS.FocusInk else Color.White, size = dpx(24)) }
+    ) { AppIcon(AIcon.Left, if (f) DS.FocusInk else Color.White, size = if (isPhone) 20.dp else dpx(24)) }
 }
 
 @Composable
@@ -1423,6 +1432,7 @@ private fun LivePage(ctx: Context) {
 
 @Composable
 private fun PlaylistPage(ctx: Context, onAdd: () -> Unit, reload: () -> Unit) {
+    val isPhonePortrait = DeviceMode.isPhonePortrait()
     val scope = rememberCoroutineScope()
     var editing by remember { mutableIntStateOf(-1) }
     var name by remember { mutableStateOf("") }
@@ -1431,52 +1441,102 @@ private fun PlaylistPage(ctx: Context, onAdd: () -> Unit, reload: () -> Unit) {
     var backups by remember { mutableStateOf(backupList(emptyList())) }
     var backupErr by remember { mutableStateOf<String?>(null) }
     PlaylistStore.savedUrl(ctx)
-    if (Secrets.plainFallback) Hint("Dieses Gerät hat keinen sicheren Schlüsselspeicher: Playlist-Adressen mit Zugangsdaten werden unverschlüsselt gespeichert.")
-    Text("Meine Playlists (${PlaylistStore.lists.size})", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+    if (Secrets.plainFallback) Hint(Lang.tr("Dieses Gerät hat keinen sicheren Schlüsselspeicher: Playlist-Adressen mit Zugangsdaten werden unverschlüsselt gespeichert."))
+    Text(Lang.tr("Meine Playlists") + " (${PlaylistStore.lists.size})", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
     PlaylistStore.lists.forEachIndexed { i, pl ->
         val isActive = i == PlaylistStore.active
         val shown = PlaylistStore.isShown(i)
-        Row(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(DS.RadiusM)).background(if (isActive) DS.Overlay2 else Color(0x12FFFFFF)).padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(pl.name + if (isActive) "  ·  " + Lang.tr("Hauptliste") else if (shown) "  ·  " + Lang.tr("zusätzlich angezeigt") else "", color = if (isActive || shown) Accent2 else Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, raw = true)
-                Text(PlaylistStore.hostOf(pl.url), color = Muted, fontSize = 13.sp, maxLines = 1)
-                val nb = if (editingB == i) 0 else PlaylistStore.backups(ctx, pl.url).size
-                if (nb > 0) Text("Backup-Server: $nb", color = Muted, fontSize = 13.sp, maxLines = 1)
-                val down = PlaylistStore.downServers(ctx, pl.url)
-                if (down.isNotEmpty()) Text("Nicht erreichbar: " + down.joinToString(", "), color = Color(0xFFFF8A80), fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        if (isPhonePortrait) {
+            Column(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(if (isActive) DS.Overlay2 else Color(0x12FFFFFF)).padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(pl.name + if (isActive) "  ·  " + Lang.tr("Hauptliste") else if (shown) "  ·  " + Lang.tr("zusätzlich angezeigt") else "", color = if (isActive || shown) Accent2 else Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, raw = true)
+                    Text(PlaylistStore.hostOf(pl.url), color = Muted, fontSize = 13.sp, maxLines = 1)
+                    val nb = if (editingB == i) 0 else PlaylistStore.backups(ctx, pl.url).size
+                    if (nb > 0) Text(Lang.tr("Backup-Server") + ": $nb", color = Muted, fontSize = 12.sp, maxLines = 1)
+                    val down = PlaylistStore.downServers(ctx, pl.url)
+                    if (down.isNotEmpty()) Text(Lang.tr("Nicht erreichbar") + ": " + down.joinToString(", "), color = Color(0xFFFF8A80), fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
+                Row(
+                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val mode = remember(PlaylistMode.version, pl.url) { PlaylistMode.get(ctx, pl.url) }
+                    SmallPill(Lang.tr(PlaylistMode.labels[mode])) {
+                        PlaylistMode.set(ctx, pl.url, (mode + 1) % PlaylistMode.labels.size)
+                        scope.launch { if (!PlaylistStore.reapplyLanguages(ctx)) PlaylistStore.applyMode(ctx) }
+                    }
+                    SmallPill(Lang.tr("Umbenennen")) { editing = i; name = pl.name }
+                    if (!isActive && shown) SmallPill(Lang.tr("Ausblenden")) {
+                        PlaylistStore.setShown(ctx, i, false)
+                        scope.launch { PlaylistStore.applyMulti(ctx) }
+                    }
+                    if (!isActive) SmallPill(Lang.tr("Zur Hauptliste machen")) {
+                        PlaylistStore.activate(ctx, i)
+                        scope.launch { PlaylistStore.load(ctx, pl.url, false) }
+                    }
+                    if (XtreamLogic.fromUrl(pl.url) != null) SmallPill(Lang.tr("Backup-Server")) {
+                        val b = PlaylistStore.backups(ctx, pl.url)
+                        editingB = i; backups = backupList(b); backupErr = null
+                    }
+                    SmallPill(Lang.tr("Löschen")) {
+                        val wasActive = isActive
+                        editingB = -1
+                        PlaylistStore.remove(ctx, i)
+                        if (PlaylistStore.lists.isEmpty()) onAdd()
+                        else if (wasActive) {
+                            val u = PlaylistStore.lists[PlaylistStore.active].url
+                            scope.launch { PlaylistStore.load(ctx, u, false) }
+                        }
+                    }
+                }
             }
-            // "Show as well" can no longer be switched on (1.4.2); playlists already shown can still be switched off
-            if (!isActive && shown) SmallPill("Nicht mehr zusätzlich anzeigen") {
-                PlaylistStore.setShown(ctx, i, false)
-                scope.launch { PlaylistStore.applyMulti(ctx) }
-            }
-            if (!isActive) SmallPill("Zur Hauptliste machen") {
-                PlaylistStore.activate(ctx, i)
-                scope.launch { PlaylistStore.load(ctx, pl.url, false) }
-            }
-            // Content mode (Wishbox): Live TV + VOD / Live TV only / VOD only, cycles on OK
-            val mode = remember(PlaylistMode.version, pl.url) { PlaylistMode.get(ctx, pl.url) }
-            SmallPill(PlaylistMode.labels[mode]) {
-                PlaylistMode.set(ctx, pl.url, (mode + 1) % PlaylistMode.labels.size)
-                // Parsed again from the stored list without network (the mode is applied while loading, saves memory)
-                scope.launch { if (!PlaylistStore.reapplyLanguages(ctx)) PlaylistStore.applyMode(ctx) }
-            }
-            SmallPill("Umbenennen") { editing = i; name = pl.name }
-            if (XtreamLogic.fromUrl(pl.url) != null) SmallPill("Backup-Server") {
-                val b = PlaylistStore.backups(ctx, pl.url)
-                editingB = i; backups = backupList(b); backupErr = null
-            }
-            SmallPill("Löschen") {
-                val wasActive = isActive
-                editingB = -1
-                PlaylistStore.remove(ctx, i)
-                if (PlaylistStore.lists.isEmpty()) onAdd()
-                else if (wasActive) {
-                    val u = PlaylistStore.lists[PlaylistStore.active].url
-                    scope.launch { PlaylistStore.load(ctx, u, false) }
+        } else {
+            Row(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(DS.RadiusM)).background(if (isActive) DS.Overlay2 else Color(0x12FFFFFF)).padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(pl.name + if (isActive) "  ·  " + Lang.tr("Hauptliste") else if (shown) "  ·  " + Lang.tr("zusätzlich angezeigt") else "", color = if (isActive || shown) Accent2 else Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, raw = true)
+                    Text(PlaylistStore.hostOf(pl.url), color = Muted, fontSize = 13.sp, maxLines = 1)
+                    val nb = if (editingB == i) 0 else PlaylistStore.backups(ctx, pl.url).size
+                    if (nb > 0) Text("Backup-Server: $nb", color = Muted, fontSize = 13.sp, maxLines = 1)
+                    val down = PlaylistStore.downServers(ctx, pl.url)
+                    if (down.isNotEmpty()) Text("Nicht erreichbar: " + down.joinToString(", "), color = Color(0xFFFF8A80), fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
+                // "Show as well" can no longer be switched on (1.4.2); playlists already shown can still be switched off
+                if (!isActive && shown) SmallPill("Nicht mehr zusätzlich anzeigen") {
+                    PlaylistStore.setShown(ctx, i, false)
+                    scope.launch { PlaylistStore.applyMulti(ctx) }
+                }
+                if (!isActive) SmallPill("Zur Hauptliste machen") {
+                    PlaylistStore.activate(ctx, i)
+                    scope.launch { PlaylistStore.load(ctx, pl.url, false) }
+                }
+                // Content mode (Wishbox): Live TV + VOD / Live TV only / VOD only, cycles on OK
+                val mode = remember(PlaylistMode.version, pl.url) { PlaylistMode.get(ctx, pl.url) }
+                SmallPill(PlaylistMode.labels[mode]) {
+                    PlaylistMode.set(ctx, pl.url, (mode + 1) % PlaylistMode.labels.size)
+                    // Parsed again from the stored list without network (the mode is applied while loading, saves memory)
+                    scope.launch { if (!PlaylistStore.reapplyLanguages(ctx)) PlaylistStore.applyMode(ctx) }
+                }
+                SmallPill("Umbenennen") { editing = i; name = pl.name }
+                if (XtreamLogic.fromUrl(pl.url) != null) SmallPill("Backup-Server") {
+                    val b = PlaylistStore.backups(ctx, pl.url)
+                    editingB = i; backups = backupList(b); backupErr = null
+                }
+                SmallPill("Löschen") {
+                    val wasActive = isActive
+                    editingB = -1
+                    PlaylistStore.remove(ctx, i)
+                    if (PlaylistStore.lists.isEmpty()) onAdd()
+                    else if (wasActive) {
+                        val u = PlaylistStore.lists[PlaylistStore.active].url
+                        scope.launch { PlaylistStore.load(ctx, u, false) }
+                    }
                 }
             }
         }
@@ -1500,9 +1560,16 @@ private fun PlaylistPage(ctx: Context, onAdd: () -> Unit, reload: () -> Unit) {
             else { PlaylistStore.setBackups(ctx, PlaylistStore.lists[editingB].url, backups.toList()); editingB = -1 }
         }
     }
-    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        PillButton("+ Weitere Playlist hinzufügen", light = true) { onAdd() }
-        PillButton("Aktive Playlist neu laden", icon = AIcon.Refresh) { reload() }
+    if (isPhonePortrait) {
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            PillButton("+ " + Lang.tr("Weitere Playlist hinzufügen"), light = true, modifier = Modifier.fillMaxWidth()) { onAdd() }
+            PillButton(Lang.tr("Aktive Playlist neu laden"), icon = AIcon.Refresh, modifier = Modifier.fillMaxWidth()) { reload() }
+        }
+    } else {
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            PillButton("+ Weitere Playlist hinzufügen", light = true) { onAdd() }
+            PillButton("Aktive Playlist neu laden", icon = AIcon.Refresh) { reload() }
+        }
     }
     LanguageFilterSection(ctx)
     SectionTitle("Automatisch aktualisieren")

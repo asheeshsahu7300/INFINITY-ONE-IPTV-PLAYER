@@ -1,11 +1,12 @@
 package com.infinity.one
 
-import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
@@ -24,9 +25,11 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 
 /**
- * Modern portrait mobile hero card, inspired by mobile streaming apps (JioHotstar / Netflix mobile):
- * - Large rounded vertical card (approx. 450dp tall)
- * - Top ranking badge ("#1 in Today's Highlights")
+ * Modern touch swipeable mobile hero carousel slider (like Hotstar / Prime Video / Netflix):
+ * - HorizontalPager for smooth touch swiping between top featured titles
+ * - Auto-sliding timer with smooth transitions
+ * - Bottom page indicator dots (active pill + inactive dots)
+ * - Top ranking badge ("#1 Trending", "#2 Trending"...)
  * - Bottom gradient scrim with title, metadata, and quick action buttons
  * - "Watch Now" primary pill button + Watchlist "+" icon button
  */
@@ -39,35 +42,51 @@ fun MobileHeroCard(
 ) {
     if (featured.isEmpty()) return
     val ctx = LocalContext.current
-    var idx by remember { mutableIntStateOf(0) }
+    val items = remember(featured) { featured.take(8) }
+    val pagerState = rememberPagerState(pageCount = { items.size })
 
-    LaunchedEffect(featured.size, General.heroSec) {
-        while (featured.size > 1 && General.heroSec > 0) {
-            delay(General.heroSec * 1000L)
-            idx = (idx + 1) % featured.size
+    // Auto-advance slider
+    val autoSlide = General.heroSec > 0 && items.size > 1
+    LaunchedEffect(autoSlide, items.size) {
+        while (autoSlide) {
+            delay((General.heroSec.coerceAtLeast(4)) * 1000L)
+            if (!pagerState.isScrollInProgress) {
+                val next = (pagerState.currentPage + 1) % items.size
+                pagerState.animateScrollToPage(next, animationSpec = tween(600))
+            }
         }
     }
 
-    val item = featured[idx.coerceIn(0, featured.lastIndex)]
     val cardShape = RoundedCornerShape(22.dp)
 
-    Box(
+    Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-            .height(440.dp)
-            .shadow(16.dp, cardShape, ambientColor = Color.Black, spotColor = Color.Black)
-            .clip(cardShape)
-            .background(Color(0xFF14131D))
-            .clickable { onOpen(item) }
+            .padding(vertical = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Crossfade(targetState = item, animationSpec = tween(700), label = "mobileHeroCrossfade") { currentItem ->
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .height(440.dp)
+                .shadow(16.dp, cardShape, ambientColor = Color.Black, spotColor = Color.Black)
+                .clip(cardShape)
+                .background(Color(0xFF14131D)),
+            pageSpacing = 12.dp
+        ) { page ->
+            val currentItem = items[page]
             val meta = rememberFullMeta(currentItem, rememberMeta(currentItem))
             val posterUrl = meta?.poster?.takeIf { it.isNotBlank() }
                 ?: currentItem.logo?.takeIf { it.isNotBlank() }
                 ?: meta?.backdrop
 
-            Box(Modifier.fillMaxSize()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clickable { onOpen(currentItem) }
+            ) {
                 // Background Poster / Art Image
                 if (!posterUrl.isNullOrBlank()) {
                     ArtImage(
@@ -94,10 +113,10 @@ fun MobileHeroCard(
                         .fillMaxSize()
                         .background(
                             Brush.verticalGradient(
-                                0.0f to Color(0x40000000),
+                                0.0f to Color(0x30000000),
                                 0.35f to Color.Transparent,
-                                0.60f to Color(0xB00D0C15),
-                                1.0f to Color(0xF80B0A11)
+                                0.58f to Color(0xCC0D0C15),
+                                1.0f to Color(0xFA0B0A11)
                             )
                         )
                 )
@@ -108,14 +127,14 @@ fun MobileHeroCard(
                         .align(Alignment.TopStart)
                         .padding(start = 14.dp, top = 14.dp)
                         .clip(RoundedCornerShape(8.dp))
-                        .background(Color(0x99000000))
+                        .background(Color(0xB3000000))
                         .border(0.5.dp, Color(0x33FFFFFF), RoundedCornerShape(8.dp))
                         .padding(horizontal = 10.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Text(
-                        text = "🔥 #1 Trending",
+                        text = "🔥 #${page + 1} Trending",
                         color = Color(0xFFFFD166),
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold
@@ -172,8 +191,7 @@ fun MobileHeroCard(
                                 .weight(1f)
                                 .height(46.dp)
                                 .clip(watchBtnShape)
-                                .background(Color(0x3DFFFFFF))
-                                .border(1.dp, Color(0x4DFFFFFF), watchBtnShape)
+                                .background(Color.White)
                                 .clickable { onPlay(currentItem) },
                             contentAlignment = Alignment.Center
                         ) {
@@ -181,10 +199,10 @@ fun MobileHeroCard(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                AppIcon(AIcon.Play, Color.White, size = 18.dp)
+                                AppIcon(AIcon.Play, Color.Black, size = 18.dp)
                                 Text(
-                                    text = "Jetzt ansehen",
-                                    color = Color.White,
+                                    text = Lang.tr("Jetzt ansehen"),
+                                    color = Color.Black,
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -197,8 +215,8 @@ fun MobileHeroCard(
                             modifier = Modifier
                                 .size(46.dp)
                                 .clip(favBtnShape)
-                                .background(if (inWatch) Accent1.copy(alpha = 0.35f) else Color(0x2EFFFFFF))
-                                .border(1.dp, if (inWatch) Accent1.copy(alpha = 0.6f) else Color(0x38FFFFFF), favBtnShape)
+                                .background(if (inWatch) Accent1.copy(alpha = 0.35f) else Color(0x33FFFFFF))
+                                .border(1.dp, if (inWatch) Accent1.copy(alpha = 0.6f) else Color(0x40FFFFFF), favBtnShape)
                                 .clickable { Library.toggleWatch(ctx, currentItem.id) },
                             contentAlignment = Alignment.Center
                         ) {
@@ -209,6 +227,30 @@ fun MobileHeroCard(
                             )
                         }
                     }
+                }
+            }
+        }
+
+        // Pager indicator dots (like Amazon Prime / Hotstar / Netflix)
+        if (items.size > 1) {
+            Row(
+                modifier = Modifier
+                    .padding(top = 10.dp)
+                    .height(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                repeat(items.size) { i ->
+                    val isActive = i == pagerState.currentPage
+                    Box(
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .background(if (isActive) Accent1 else Color(0x38FFFFFF))
+                            .then(
+                                if (isActive) Modifier.size(width = 18.dp, height = 5.dp)
+                                else Modifier.size(5.dp)
+                            )
+                    )
                 }
             }
         }

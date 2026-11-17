@@ -153,8 +153,11 @@ private fun NavTab(t: HeaderTab, fixedReq: FocusRequester?) {
 @Composable
 private fun RoundHeaderButton(icon: AIcon, modifier: Modifier = Modifier, onClick: () -> Unit, extra: @Composable () -> Unit = {}) {
     var f by remember { mutableStateOf(false) }
+    val isPhone = DeviceMode.isPhonePortrait()
+    val btnSize = if (isPhone) 38.dp else dpx(48)
+    val iconSize = if (isPhone) 20.dp else dpx(22)
     Box(
-        modifier.size(dpx(48)).clip(CircleShape)
+        modifier.size(btnSize).clip(CircleShape)
             .background(if (f) DS.FocusFill else Tok.Glass)
             .border(1.dp, if (f) DS.FocusFill else Color(0x26FFFFFF), CircleShape)
             .onFocusChanged { f = it.isFocused }
@@ -162,7 +165,7 @@ private fun RoundHeaderButton(icon: AIcon, modifier: Modifier = Modifier, onClic
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
-        AppIcon(icon, if (f) DS.FocusInk else Color.White, size = dpx(22))
+        AppIcon(icon, if (f) DS.FocusInk else Color.White, size = iconSize)
         extra()
     }
 }
@@ -263,8 +266,12 @@ internal fun BellButton(onReminder: (Reminder) -> Unit, onNewEpisode: (String) -
     val news = NewEpisodes.list.toList()
     Box {
         RoundHeaderButton(AIcon.Bell, onClick = { open = true }) {
-            // Dot: red for new episodes, otherwise in the design color once reminders are set
-            if (list.isNotEmpty() || news.isNotEmpty()) Box(Modifier.padding(start = dpx(22), bottom = dpx(22)).size(dpx(9)).clip(CircleShape).background(if (news.isNotEmpty()) Color(0xFFFF5A5F) else Accent1))
+            val isPhone = DeviceMode.isPhonePortrait()
+            if (list.isNotEmpty() || news.isNotEmpty()) Box(
+                Modifier
+                    .then(if (isPhone) Modifier.align(Alignment.TopEnd).padding(end = 6.dp, top = 6.dp).size(7.dp) else Modifier.padding(start = dpx(22), bottom = dpx(22)).size(dpx(9)))
+                    .clip(CircleShape).background(if (news.isNotEmpty()) Color(0xFFFF5A5F) else Accent1)
+            )
         }
         if (open) {
             if (list.isEmpty() && news.isEmpty()) OptionPopup(listOf("Keine Benachrichtigungen"), -1, { open = false }, listOf(AIcon.BellOff)) { open = false }
