@@ -394,7 +394,7 @@ fun Guide(
                             if (ci == catIdx) Modifier.focusRequester(catReq) else Modifier,
                             onFocus = { inCats = true; inBlock = false; if (catIdx != ci) catIdx = ci },
                             onLeft = onClose
-                        ) { runCatching { focus.requestFocus() } }
+                        ) { catIdx = ci; runCatching { focus.requestFocus() } }
                     }
                 }
                 Spacer(Modifier.width(12.dp))
