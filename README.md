@@ -7,7 +7,9 @@
 
   <p>
     <a href="https://github.com/asheeshsahu7300/infinity-one/actions/workflows/ci.yml">
-      <img src="https://github.com/asheeshsahu7300/infinity-one/actions/workflows/ci.yml/badge.svg" alt="Android CI" />
+     <img width="1280" height="737" alt="Screenshot 2026-11-18 094005" src="https://github.com/user-attachments/assets/73e0e6c5-9269-4c75-b498-57bc322dfeaf" />
+
+" />
     </a>
   </p>
 </div>
