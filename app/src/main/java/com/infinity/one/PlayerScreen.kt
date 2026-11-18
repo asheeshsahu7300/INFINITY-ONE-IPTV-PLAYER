@@ -161,9 +161,12 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
     val act = remember(ctx) { findActivity(ctx) }
     val cfg = LocalConfiguration.current
     val isLandscape = cfg.orientation == Configuration.ORIENTATION_LANDSCAPE
-    val isPhone = DeviceMode.isPhonePortrait() || (!DeviceMode.isTablet() && isLandscape)
+    val isTv = DeviceMode.isTv(ctx)
+    val isTablet = DeviceMode.isTablet()
+    val isPhone = !isTv && !isTablet
 
     fun toggleLandscape() {
+        if (isTv || isTablet) return
         act?.let { a ->
             a.requestedOrientation = if (isLandscape) {
                 ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
@@ -175,8 +178,10 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
 
     DisposableEffect(Unit) {
         onDispose {
-            act?.let { a ->
-                a.requestedOrientation = if (MobilePrefs.landscape) ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE else ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            if (!isTv) {
+                act?.let { a ->
+                    a.requestedOrientation = if (MobilePrefs.landscape) ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE else ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                }
             }
         }
     }
@@ -1638,7 +1643,7 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
                                 PlayerIcon(PIcon.External, it)
                             }
                             if (isPhone) {
-                                PRoundButton(size = if (isPhone) 40.dp else PT.BtnSize, label = if (isLandscape) "Hochformat" else "Querformat", onLabel = setLabel, onClick = { toggleLandscape() }) {
+                                PRoundButton(size = if (isPhone) 40.dp else PT.BtnSize, label = Lang.tr(if (isLandscape) "Portrait" else "Landscape"), onLabel = setLabel, onClick = { toggleLandscape() }) {
                                     AppIcon(if (isLandscape) AIcon.FullscreenExit else AIcon.Fullscreen, it, size = 22.dp)
                                 }
                             }
@@ -1756,7 +1761,7 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
                                         PlayerIcon(PIcon.Settings, it)
                                     }
                                     if (isPhone) {
-                                        PRoundButton(size = bSize, label = if (isLandscape) "Hochformat" else "Querformat", onLabel = setLabel, onClick = { toggleLandscape() }) {
+                                        PRoundButton(size = bSize, label = Lang.tr(if (isLandscape) "Portrait" else "Landscape"), onLabel = setLabel, onClick = { toggleLandscape() }) {
                                             AppIcon(if (isLandscape) AIcon.FullscreenExit else AIcon.Fullscreen, it, size = 22.dp)
                                         }
                                     }
