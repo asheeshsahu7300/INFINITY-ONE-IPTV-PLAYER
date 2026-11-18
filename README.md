@@ -1,18 +1,88 @@
-# INFINITY ONE
+<div align="center">
+ <img width="693" height="412" alt="Screenshot 2026-11-18 094005" src="https://github.com/user-attachments/assets/db8c17c2-49a8-4f9b-85e7-230171286a33" />
 
-A modern, fast, and feature-rich IPTV streaming player designed for Android TV, Google TV, and Fire TV.
+
+
+  # INFINITY ONE
+
+  <p>A modern, high-performance, and feature-rich media streaming player designed for Android TV, Google TV, Fire TV, Tablets, and Smartphones.</p>
+
+  
+</div>
+
+---
 
 ## Features
 
-- **Live TV, Movies & Series**: Seamless streaming support for Xtream Codes, Stalker portals, and M3U playlists.
-- **TV Guide (EPG)**: Comprehensive electronic program guide with channel logos, catchup, and search.
-- **Customizable Interface**: Dynamic rows, category views, custom themes, and font size options.
-- **Audio & Subtitles**: Multi-track audio selection, external subtitle search, and subtitle styling.
-- **Multi-Profile Support**: Individual watch history, favorites, and parental controls per profile.
-- **Optimized for TV**: Fully navigable using standard remote controls (D-Pad).
+- **Universal Device Support**: Fully responsive across Android TV remotes (D-Pad) and touchscreen smartphones and tablets.
+- **Live TV, Movies & Series**: High-performance streaming support for Xtream Codes API, Stalker portals, and M3U / M3U8 playlists.
+- **Interactive TV Guide (EPG)**: Grid and timeline electronic program guide with channel logos, catchup support, and quick search.
+- **Multi-View Mode**: Watch multiple live streams simultaneously in customizable grid layouts.
+- **Live Recording & Catchup**: Record live broadcasts directly to local or external storage in the background.
+- **Audio & Subtitles**: Hardware-accelerated multi-track audio selection, external subtitle search, and subtitle customization.
+- **Multi-Profile & Cloud Sync**: Individual watch histories, favorites, and parental PIN control per profile, with optional Google Drive backup.
+- **Modern Dark UI**: Clean, high-contrast monochrome design optimized for OLED displays and long viewing sessions.
+
+---
+
+## Screenshots
+
+### Android TV & Tablet Interface
+
+| Movies Hub | Series Hub |
+| :---: | :---: |
+| ![Tablet / TV Movies](docs/screenshots/tablet_tv_movies.jpg) | ![Tablet / TV Series](docs/screenshots/tablet_tv_series.jpg) |
+
+| Setup & Wi-Fi Phone Import | Splash Screen |
+| :---: | :---: |
+| ![Tablet / TV Add Playlist](docs/screenshots/tablet_tv_add_playlist.jpg) | ![Tablet / TV Splash](docs/screenshots/tablet_tv_splash.jpg) |
+
+### Smartphone Interface
+
+| Movies & VOD | Add Playlist | Speed Test | About & Info |
+| :---: | :---: | :---: | :---: |
+| <img src="docs/screenshots/mobile_movies.jpg" width="220" alt="Mobile Movies" /> | <img src="docs/screenshots/mobile_add_playlist.jpg" width="220" alt="Mobile Add Playlist" /> | <img src="docs/screenshots/mobile_speed_test.jpg" width="220" alt="Mobile Speed Test" /> | <img src="docs/screenshots/mobile_settings_about.jpg" width="220" alt="Mobile About" /> |
+
+---
 
 ## Getting Started
 
-1. Open **INFINITY ONE** on your device.
-2. Add your playlist using Xtream Codes login, Stalker portal, or M3U URL.
-3. Start streaming your favorite channels and content.
+1. **Install**: Download and install **INFINITY ONE** on your TV, tablet, or phone.
+2. **Add Playlist**: Connect your own playlist via:
+   - Xtream Codes Login (Server URL, Username, Password)
+   - M3U / M3U8 Playlist URL
+   - Stalker Portal MAC Address
+3. **Stream**: Navigate using your TV remote control or touch screen.
+
+---
+
+## Building from Source
+
+### Prerequisites
+- JDK 17
+- Android SDK (API 34+)
+
+### Build Commands
+```bash
+# Clone the repository
+git clone https://github.com/asheeshsahu7300/infinity-one.git
+cd infinity-one
+
+# Run unit tests
+./gradlew testDebugUnitTest
+
+# Build debug APK
+./gradlew assembleDebug
+
+# Build production App Bundle (AAB)
+./gradlew bundleRelease
+```
+
+---
+
+## Disclaimer
+
+**INFINITY ONE** is strictly a media player application. 
+- It does not provide, host, include, or distribute any media content, channels, or playlists.
+- Users must provide their own legally obtained content or playlists.
+- We do not endorse or support the streaming of copyrighted material without permission of the copyright holder.
