@@ -1,17 +1,13 @@
 <div align="center">
-  <img src="docs/screenshots/banner.jpg" alt="INFINITY ONE" width="100%" />
+ <img width="693" height="412" alt="Screenshot 2026-11-18 094005" src="https://github.com/user-attachments/assets/db8c17c2-49a8-4f9b-85e7-230171286a33" />
+
+
 
   # INFINITY ONE
 
   <p>A modern, high-performance, and feature-rich media streaming player designed for Android TV, Google TV, Fire TV, Tablets, and Smartphones.</p>
 
-  <p>
-    <a href="https://github.com/asheeshsahu7300/infinity-one/actions/workflows/ci.yml">
-     <img width="1280" height="737" alt="Screenshot 2026-11-18 094005" src="https://github.com/user-attachments/assets/73e0e6c5-9269-4c75-b498-57bc322dfeaf" />
-
-" />
-    </a>
-  </p>
+  
 </div>
 
 ---
