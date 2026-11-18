@@ -142,7 +142,12 @@ object General {
         refreshMinute = p.getInt("refresh_minute", 0).coerceIn(0, 59)
         refreshDow = p.getInt("refresh_dow", java.util.Calendar.MONDAY).coerceIn(1, 7)
         lastRefresh = p.getLong("last_refresh", 0L)
-        lang = p.getString("lang", "en")?.ifBlank { "en" } ?: "en"
+        if (!p.contains("lang_v2")) {
+            lang = "en"
+            p.edit().putString("lang", "en").putBoolean("lang_v2", true).apply()
+        } else {
+            lang = p.getString("lang", "en")?.ifBlank { "en" } ?: "en"
+        }
         tzId = p.getString("tz_id", "") ?: ""
         timeFmt = p.getInt("time_fmt", 0).coerceIn(0, 2)
         sys24 = android.text.format.DateFormat.is24HourFormat(c)
@@ -181,7 +186,11 @@ object General {
             .putInt("refresh_minute", refreshMinute).putInt("refresh_dow", refreshDow).apply()
         Updater.apply(c)
     }
-    fun setLang(c: Context, v: String) { lang = v; prefs(c).edit().putString("lang", v).apply(); PlayerLocale.locale = Lang.locale() }
+    fun setLang(c: Context, v: String) {
+        lang = v
+        prefs(c).edit().putString("lang", v).putBoolean("lang_v2", true).apply()
+        PlayerLocale.locale = Lang.locale()
+    }
     fun setTz(c: Context, id: String) { tzId = id; prefs(c).edit().putString("tz_id", id).apply() }
     fun setTimeFmt(c: Context, v: Int) { timeFmt = v.coerceIn(0, 2); prefs(c).edit().putInt("time_fmt", timeFmt).apply() }
     fun setFont(c: Context, v: Int) { fontIdx = v.coerceIn(0, FONTS.lastIndex); prefs(c).edit().putInt("font2", fontIdx).apply() }

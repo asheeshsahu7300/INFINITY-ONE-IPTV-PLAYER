@@ -36,30 +36,52 @@ import androidx.compose.ui.window.PopupProperties
 
 @Composable
 fun FilterPill(text: String, active: Boolean, modifier: Modifier = Modifier, icon: FIcon? = null, caret: Boolean = false, aicon: AIcon? = null, raw: Boolean = false, onClick: () -> Unit) {
+    val isPhone = DeviceMode.isPhonePortrait()
     var f by remember { mutableStateOf(false) }
     val s by animateFloatAsState(if (f) focusScale(1.06f) else 1f, label = "fp")
     val shape = RoundedCornerShape(50)
-    // Consistent with the buttons of the detail page (round 15): slightly transparent with a fine border, selection filled light
-    val c = ButtonColors(
-        if (f) DS.FocusFill else if (active) Color(0x4DFFFFFF) else Color(0x33FFFFFF),
-        if (f) DS.FocusInk else Color.White
-    )
+    val c = if (isPhone) {
+        ButtonColors(
+            bg = if (active) Color.White else Color(0x24FFFFFF),
+            text = if (active) Color.Black else Color(0xEEFFFFFF)
+        )
+    } else {
+        ButtonColors(
+            if (f) DS.FocusFill else if (active) Color(0x4DFFFFFF) else Color(0x33FFFFFF),
+            if (f) DS.FocusInk else Color.White
+        )
+    }
     Box(
         modifier.graphicsLayer { scaleX = s; scaleY = s }
-            .height(dpx(42))
+            .then(if (isPhone) Modifier.height(34.dp) else Modifier.height(dpx(42)))
             .clip(shape)
             .background(c.bg)
-            .border(1.dp, if (f) DS.FocusFill else if (active) Color(0xB3FFFFFF) else Color(0x40FFFFFF), shape)
+            .border(
+                1.dp,
+                if (isPhone) {
+                    if (active) Color.Transparent else Color(0x22FFFFFF)
+                } else {
+                    if (f) DS.FocusFill else if (active) Color(0xB3FFFFFF) else Color(0x40FFFFFF)
+                },
+                shape
+            )
             .onFocusChanged { f = it.isFocused }
             .clickable(onClick = onClick)
-            .padding(horizontal = dpx(18)),
+            .padding(horizontal = if (isPhone) 12.dp else dpx(18)),
         contentAlignment = Alignment.Center
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (icon != null) FilterIcon(icon, c.text, 20.dp)
-            if (aicon != null) AppIcon(aicon, c.text, size = 17.dp)
-            if (text.isNotEmpty()) Text(text, color = c.text, fontSize = spx(14.3f), fontWeight = FontWeight.SemiBold, maxLines = 1, raw = raw)
-            if (caret) AppIcon(AIcon.Caret, c.text, size = 16.dp)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(if (isPhone) 5.dp else 8.dp)) {
+            if (icon != null) FilterIcon(icon, c.text, if (isPhone) 15.dp else 20.dp)
+            if (aicon != null) AppIcon(aicon, c.text, size = if (isPhone) 14.dp else 17.dp)
+            if (text.isNotEmpty()) Text(
+                text,
+                color = c.text,
+                fontSize = if (isPhone) 12.sp else spx(14.3f),
+                fontWeight = if (active) FontWeight.Bold else FontWeight.SemiBold,
+                maxLines = 1,
+                raw = raw
+            )
+            if (caret) AppIcon(AIcon.Caret, c.text, size = if (isPhone) 12.dp else 16.dp)
         }
     }
 }

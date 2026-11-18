@@ -110,10 +110,10 @@ fun PlaylistLoadingOverlay() {
         ) {
             BrandLogo(Modifier.height(48.dp).alpha(if (moving) breathe else 1f))
             Spacer(Modifier.height(40.dp))
-            Text("Playlist wird geladen", color = Color.White.copy(alpha = 0.92f), fontSize = 20.sp, fontWeight = FontWeight.Medium, letterSpacing = 0.4.sp)
+            Text(Lang.tr("Playlist wird geladen"), color = Color.White.copy(alpha = 0.92f), fontSize = 20.sp, fontWeight = FontWeight.Medium, letterSpacing = 0.4.sp)
             Spacer(Modifier.height(8.dp))
             Crossfade(PlaylistStore.phase, animationSpec = tween(if (moving) 450 else 0), label = "phase") { p ->
-                Text(p, color = Muted, fontSize = 14.sp)
+                Text(Lang.tr(p), color = Muted, fontSize = 14.sp)
             }
             Spacer(Modifier.height(28.dp))
             // thin progress line
@@ -149,7 +149,7 @@ fun PlaylistLoadingOverlay() {
             }
             if (PlaylistStore.askRequested) {
                 Spacer(Modifier.height(18.dp))
-                Text("Die Sprachauswahl erscheint, sobald der Download fertig ist.", color = Accent2, fontSize = 14.sp)
+                Text(Lang.tr("Die Sprachauswahl erscheint, sobald der Download fertig ist."), color = Accent2, fontSize = 14.sp)
             }
             if (showHint) {
                 Spacer(Modifier.height(24.dp))
@@ -157,7 +157,7 @@ fun PlaylistLoadingOverlay() {
             }
             Spacer(Modifier.height(30.dp))
             Text(
-                if (hint) "Noch einmal Zurück drücken zum Abbrechen" else "Deine Angaben sind gespeichert – bei einer Unterbrechung geht es beim nächsten Start weiter.",
+                if (hint) Lang.tr("Noch einmal Zurück drücken zum Abbrechen") else Lang.tr("Deine Angaben sind gespeichert – bei einer Unterbrechung geht es beim nächsten Start weiter."),
                 color = if (hint) Accent2 else Muted.copy(alpha = 0.55f), fontSize = 13.sp, textAlign = TextAlign.Center
             )
         }
@@ -174,18 +174,18 @@ private fun SlowHint(onChoose: () -> Unit, onClose: () -> Unit) {
         Modifier.fillMaxWidth().clip(shape).background(Surf).border(DS.Border, Accent2.copy(alpha = 0.6f), shape).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Text("Das dauert gerade sehr lange.", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        Text(Lang.tr("Das dauert gerade sehr lange."), color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
         Text(
-            "Sehr große Playlists brauchen lange. Mit der Sprachauswahl lädst du nur die Titel, die du wirklich brauchst.",
+            Lang.tr("Sehr große Playlists brauchen lange. Mit der Sprachauswahl lädst du nur die Titel, die du wirklich brauchst."),
             color = Color.White.copy(alpha = 0.85f), fontSize = 15.sp, lineHeight = 21.sp
         )
         if (Lang.code() != "en") Text(
-            "Das dauert ungewöhnlich lange. Mit der Sprachauswahl lädst du nur die Titel, die du wirklich brauchst.",
+            Lang.tr("Das dauert ungewöhnlich lange. Mit der Sprachauswahl lädst du nur die Titel, die du wirklich brauchst."),
             color = Muted, fontSize = 14.sp, lineHeight = 20.sp
         )
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(top = 6.dp)) {
-            FocusButton("Sprachen wählen", Modifier.focusRequester(first), primary = true) { onChoose() }
-            FocusButton("Weiter warten") { onClose() }
+            FocusButton(Lang.tr("Sprachen wählen"), Modifier.focusRequester(first), primary = true) { onChoose() }
+            FocusButton(Lang.tr("Weiter warten")) { onClose() }
         }
     }
 }

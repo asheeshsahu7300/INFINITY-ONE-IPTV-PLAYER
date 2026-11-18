@@ -34,7 +34,8 @@ enum class AIcon {
     Sparkle, Music, Tag, Live, Download, Person, Lock, Storage, Pulse, Backspace, History,
     Tomato, Rewind, FastForward, Catchup, Eye, EyeOff, Globe,
     // Round 14
-    Edit, Heart, HeartFilled, Sliders, Layers
+    Edit, Heart, HeartFilled, Sliders, Layers,
+    Fullscreen, FullscreenExit
 }
 
 @Composable
@@ -62,12 +63,14 @@ private fun DrawScope.l(c: Color, u: Float, x1: Float, y1: Float, x2: Float, y2:
 }
 
 private fun DrawScope.poly(c: Color, u: Float, w: Float, closed: Boolean, vararg pts: Float) {
-    val p = Path()
-    p.moveTo(pts[0] * u, pts[1] * u)
-    var i = 2
-    while (i < pts.size) { p.lineTo(pts[i] * u, pts[i + 1] * u); i += 2 }
-    if (closed) p.close()
-    drawPath(p, c, style = Stroke(width = w * u, cap = StrokeCap.Round, join = StrokeJoin.Round))
+    var i = 0
+    while (i < pts.size - 2) {
+        drawLine(c, Offset(pts[i] * u, pts[i + 1] * u), Offset(pts[i + 2] * u, pts[i + 3] * u), strokeWidth = w * u, cap = StrokeCap.Round)
+        i += 2
+    }
+    if (closed && pts.size >= 4) {
+        drawLine(c, Offset(pts[pts.size - 2] * u, pts[pts.size - 1] * u), Offset(pts[0] * u, pts[1] * u), strokeWidth = w * u, cap = StrokeCap.Round)
+    }
 }
 
 private fun DrawScope.fillPoly(c: Color, u: Float, vararg pts: Float) {
@@ -104,18 +107,20 @@ private fun star(u: Float): Path {
 
 /** Bell (for reminders). */
 private fun DrawScope.bell(c: Color, u: Float) {
-    val p = Path()
-    p.moveTo(5f * u, 17f * u)
-    p.lineTo(6.5f * u, 14.5f * u)
-    p.lineTo(6.5f * u, 10.5f * u)
-    p.cubicTo(6.5f * u, 7f * u, 9f * u, 4.5f * u, 12f * u, 4.5f * u)
-    p.cubicTo(15f * u, 4.5f * u, 17.5f * u, 7f * u, 17.5f * u, 10.5f * u)
-    p.lineTo(17.5f * u, 14.5f * u)
-    p.lineTo(19f * u, 17f * u)
-    p.close()
-    drawPath(p, c, style = Stroke(width = 2f * u, cap = StrokeCap.Round, join = StrokeJoin.Round))
-    arc(c, u, 12f, 18.6f, 2.2f, 0f, 180f, 2f)
-    l(c, u, 12f, 2.8f, 12f, 4.5f)
+    // Top stem
+    l(c, u, 12f, 2.5f, 12f, 4.5f, 2.2f)
+    // Dome
+    arc(c, u, 12f, 10f, 5.5f, 180f, 180f, 2f)
+    // Sides
+    l(c, u, 6.5f, 10f, 6.5f, 14f, 2f)
+    l(c, u, 17.5f, 10f, 17.5f, 14f, 2f)
+    // Flare
+    l(c, u, 6.5f, 14f, 4.5f, 17f, 2f)
+    l(c, u, 17.5f, 14f, 19.5f, 17f, 2f)
+    // Rim
+    l(c, u, 4.5f, 17f, 19.5f, 17f, 2f)
+    // Clapper
+    arc(c, u, 12f, 17.5f, 2.4f, 0f, 180f, 2.2f)
 }
 
 /** Clock with a counterclockwise arrow (history). */
@@ -189,10 +194,22 @@ private fun DrawScope.drawAIcon(icon: AIcon, c: Color) {
             l(c, u, 12.5f, 11.5f, 19.5f, 4.5f)
             poly(c, u, 2f, false, 14.5f, 4.5f, 19.5f, 4.5f, 19.5f, 9.5f)
         }
-        AIcon.Up -> poly(c, u, 2.4f, false, 5.5f, 15f, 12f, 8.5f, 18.5f, 15f)
-        AIcon.Down -> poly(c, u, 2.4f, false, 5.5f, 9f, 12f, 15.5f, 18.5f, 9f)
-        AIcon.Left -> poly(c, u, 2.4f, false, 15f, 5.5f, 8.5f, 12f, 15f, 18.5f)
-        AIcon.Right -> poly(c, u, 2.4f, false, 9f, 5.5f, 15.5f, 12f, 9f, 18.5f)
+        AIcon.Up -> {
+            l(c, u, 5.5f, 15f, 12f, 8.5f, 2.6f)
+            l(c, u, 12f, 8.5f, 18.5f, 15f, 2.6f)
+        }
+        AIcon.Down -> {
+            l(c, u, 5.5f, 9f, 12f, 15.5f, 2.6f)
+            l(c, u, 12f, 15.5f, 18.5f, 9f, 2.6f)
+        }
+        AIcon.Left -> {
+            l(c, u, 15f, 5.5f, 8.5f, 12f, 2.6f)
+            l(c, u, 8.5f, 12f, 15f, 18.5f, 2.6f)
+        }
+        AIcon.Right -> {
+            l(c, u, 9f, 5.5f, 15.5f, 12f, 2.6f)
+            l(c, u, 15.5f, 12f, 9f, 18.5f, 2.6f)
+        }
         AIcon.Caret -> fillPoly(c, u, 7f, 9.5f, 17f, 9.5f, 12f, 15.5f)
         AIcon.Dot -> drawCircle(c, radius = 4.5f * u, center = Offset(12f * u, 12f * u))
         AIcon.Gear -> {
@@ -299,6 +316,18 @@ private fun DrawScope.drawAIcon(icon: AIcon, c: Color) {
         AIcon.Layers -> {
             poly(c, u, 2f, true, 12f, 4f, 21f, 9f, 12f, 14f, 3f, 9f)
             poly(c, u, 2f, false, 3f, 13f, 12f, 18f, 21f, 13f)
+        }
+        AIcon.Fullscreen -> {
+            poly(c, u, 2.2f, false, 8f, 4f, 4f, 4f, 4f, 8f)
+            poly(c, u, 2.2f, false, 16f, 4f, 20f, 4f, 20f, 8f)
+            poly(c, u, 2.2f, false, 4f, 16f, 4f, 20f, 8f, 20f)
+            poly(c, u, 2.2f, false, 16f, 20f, 20f, 20f, 20f, 16f)
+        }
+        AIcon.FullscreenExit -> {
+            poly(c, u, 2.2f, false, 4f, 8f, 8f, 8f, 8f, 4f)
+            poly(c, u, 2.2f, false, 20f, 8f, 16f, 8f, 16f, 4f)
+            poly(c, u, 2.2f, false, 4f, 16f, 8f, 16f, 8f, 20f)
+            poly(c, u, 2.2f, false, 20f, 16f, 16f, 16f, 16f, 20f)
         }
     }
 }

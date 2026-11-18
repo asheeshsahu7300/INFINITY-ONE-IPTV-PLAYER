@@ -33,6 +33,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -107,6 +108,53 @@ fun CinematicBackdrop(
     item: Item? = null,
     modifier: Modifier = Modifier
 ) {
+    val isPhone = DeviceMode.isPhonePortrait()
+    if (isPhone) {
+        val artUrl = backdropUrl?.takeIf { it.isNotBlank() } ?: posterUrl?.takeIf { it.isNotBlank() }
+        Box(modifier.background(Bg)) {
+            if (artUrl != null) {
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(310.dp)
+                        .align(Alignment.TopCenter)
+                ) {
+                    ArtImage(
+                        artUrl,
+                        null,
+                        Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop,
+                        alignment = Alignment.TopCenter
+                    )
+                    // Top vignette for status bar and back button
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .height(90.dp)
+                            .background(
+                                Brush.verticalGradient(
+                                    listOf(Bg.copy(alpha = 0.85f), Color.Transparent)
+                                )
+                            )
+                    )
+                    // Bottom gradient fade into solid black Bg
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .height(200.dp)
+                            .align(Alignment.BottomCenter)
+                            .background(
+                                Brush.verticalGradient(
+                                    listOf(Color.Transparent, Bg.copy(alpha = 0.55f), Bg.copy(alpha = 0.92f), Bg)
+                                )
+                            )
+                    )
+                }
+            }
+        }
+        return
+    }
+
     Box(modifier.background(Bg)) {
         val hasBackdrop = !backdropUrl.isNullOrBlank()
         val hasPoster = !posterUrl.isNullOrBlank()

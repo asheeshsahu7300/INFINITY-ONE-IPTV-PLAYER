@@ -82,7 +82,7 @@ open class BlockLayout(private val prefName: String, val blocks: List<LayoutBloc
 
 private val HOME_BLOCKS = listOf(
     LayoutBlock("hero", "Große Slideshow", "Großes Bild oben mit aktuellen Filmen und Serien", fixed = true),
-    LayoutBlock("tiles", "Kacheln", "Live TV, Filme, Serien und Favoriten"),
+    LayoutBlock("tiles", "Kacheln", "Live TV, Movies, Series and Favorites"),
     LayoutBlock("resume", "Weiterschauen", "Dort weitermachen, wo du aufgehört hast"),
     LayoutBlock("favch", "Meine Sender", "Deine Live-Favoriten als Reihe"),
     LayoutBlock("chnow", "Live TV gerade", "Was jetzt auf deinen Sendern läuft"),
@@ -117,38 +117,64 @@ object BoomerLayout : BlockLayout("infinity_boomerlayout", BOOMER_BLOCKS, setOf(
 @Composable
 internal fun BlockLayoutPage(ctx: Context, layout: BlockLayout, intro: String) {
     Hint(intro)
+    val isPhone = DeviceMode.isPhonePortrait()
     // Live overview: the rows exactly as they will appear, top to bottom (hidden ones are left out)
     val shownNow = layout.order.filter { layout.shown(it) }.mapNotNull { layout.block(it)?.title }
     Column(
-        Modifier.widthIn(max = 900.dp).clip(RoundedCornerShape(12.dp)).background(Color(0x22FFFFFF)).padding(12.dp),
+        Modifier.fillMaxWidth().widthIn(max = 900.dp).clip(RoundedCornerShape(12.dp)).background(Color(0x22FFFFFF)).padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        Text("So sieht die Reihenfolge aus", color = Muted, fontSize = 13.sp)
-        if (shownNow.isEmpty()) Text("Nichts gezeigt", color = Muted, fontSize = 15.sp)
+        Text(Lang.tr("So sieht die Reihenfolge aus"), color = Muted, fontSize = 13.sp)
+        if (shownNow.isEmpty()) Text(Lang.tr("Nichts gezeigt"), color = Muted, fontSize = 15.sp)
         shownNow.forEachIndexed { i, t -> Text(raw = true, text = "${i + 1}.  " + Lang.tr(t), color = Color.White, fontSize = 15.sp) }
     }
     layout.order.forEach { id ->
         val b = layout.block(id) ?: return@forEach
         key(id) {
             val on = layout.shown(id)
-            Row(
-                Modifier.fillMaxWidth().widthIn(max = 900.dp),
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(b.title, color = if (on) Color.White else Muted, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-                    Text(b.sub, color = Muted, fontSize = 13.sp)
+            if (isPhone) {
+                Column(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(Color(0x10FFFFFF)).padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(Lang.tr(b.title), color = if (on) Color.White else Muted, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                        Text(Lang.tr(b.sub), color = Muted, fontSize = 12.sp)
+                    }
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (b.fixed) {
+                            Text(Lang.tr("Immer oben"), color = Muted, fontSize = 12.sp)
+                        } else {
+                            SmallPill(if (on) Lang.tr("Gezeigt") else Lang.tr("Versteckt"), icon = if (on) AIcon.Eye else AIcon.EyeOff) { layout.setShown(ctx, id, !on) }
+                            SmallPill(Lang.tr("Hoch"), icon = AIcon.Up) { layout.move(ctx, id, -1) }
+                            SmallPill(Lang.tr("Runter"), icon = AIcon.Down) { layout.move(ctx, id, 1) }
+                        }
+                    }
                 }
-                if (b.fixed) Text("Immer oben", color = Muted, fontSize = 13.sp)
-                else SmallPill(if (on) "Gezeigt" else "Versteckt", icon = if (on) AIcon.Eye else AIcon.EyeOff) { layout.setShown(ctx, id, !on) }
-                if (!b.fixed) {
-                    SmallPill("Hoch", icon = AIcon.Up) { layout.move(ctx, id, -1) }
-                    SmallPill("Runter", icon = AIcon.Down) { layout.move(ctx, id, 1) }
+            } else {
+                Row(
+                    Modifier.fillMaxWidth().widthIn(max = 900.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(Lang.tr(b.title), color = if (on) Color.White else Muted, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                        Text(Lang.tr(b.sub), color = Muted, fontSize = 13.sp)
+                    }
+                    if (b.fixed) Text(Lang.tr("Immer oben"), color = Muted, fontSize = 13.sp)
+                    else SmallPill(if (on) Lang.tr("Gezeigt") else Lang.tr("Versteckt"), icon = if (on) AIcon.Eye else AIcon.EyeOff) { layout.setShown(ctx, id, !on) }
+                    if (!b.fixed) {
+                        SmallPill(Lang.tr("Hoch"), icon = AIcon.Up) { layout.move(ctx, id, -1) }
+                        SmallPill(Lang.tr("Runter"), icon = AIcon.Down) { layout.move(ctx, id, 1) }
+                    }
                 }
             }
         }
     }
-    ConfirmPill("Auf Standard zurücksetzen") { layout.reset(ctx) }
+    ConfirmPill(Lang.tr("Auf Standard zurücksetzen")) { layout.reset(ctx) }
 }
 
 /** Settings page „Startseite anpassen“. */

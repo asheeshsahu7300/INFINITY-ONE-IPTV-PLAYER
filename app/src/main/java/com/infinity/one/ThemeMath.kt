@@ -136,8 +136,9 @@ object ThemeMath {
         2 -> 1f
         3 -> 1.15f
         4 -> 1.3f
-        // Phone in landscape (e.g. 780 x 360 dp): the design is 960 x 540 dp, so scale down so everything fits on the screen
-        else -> if (screenWidthDp > 1000) (screenWidthDp / 960f).coerceIn(1f, 2f)
+        // Portrait mode (phone/tablet): use 1.0f base density so touch targets and fonts match standard mobile design
+        else -> if (screenHeightDp > screenWidthDp && screenWidthDp < 600) 1f
+        else if (screenWidthDp > 1000) (screenWidthDp / 960f).coerceIn(1f, 2f)
         else minOf(screenWidthDp / 960f, screenHeightDp / 540f, 1f).coerceIn(0.72f, 1f)
     }
 }

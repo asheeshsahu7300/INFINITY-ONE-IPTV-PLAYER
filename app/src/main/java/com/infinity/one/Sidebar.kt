@@ -171,8 +171,8 @@ object SidebarPrefs {
 /** Height of the bar at the top. */
 val TopBarH: androidx.compose.ui.unit.Dp get() = dpx(68)
 
-/** Space for the sidebar at the content (left, right or top). */
-fun Modifier.sidebarPad(): Modifier = when (SidebarPrefs.pos) {
+/** Space for the sidebar at the content (left, right or top). When disabled (e.g. mobile portrait), applies no padding. */
+fun Modifier.sidebarPad(enabled: Boolean = true): Modifier = if (!enabled) this else when (SidebarPrefs.pos) {
     SidebarPrefs.RIGHT -> this.padding(end = DS.SidebarW)
     SidebarPrefs.TOP -> this.padding(top = TopBarH)
     else -> this.padding(start = DS.SidebarW)

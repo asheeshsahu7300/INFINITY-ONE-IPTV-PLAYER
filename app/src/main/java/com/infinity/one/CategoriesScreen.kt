@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -94,8 +95,9 @@ fun CategoriesScreen(
     val firstFocus = ContentFocus.req
     var inPills by remember { mutableStateOf(false) }
     var inSidebar by remember { mutableStateOf(false) }
-    BackHandler(enabled = !inPills) { runCatching { pillFocus.requestFocus() } }
-    BackHandler(enabled = inPills) { onBack() }
+    val isPhonePortrait = DeviceMode.isPhonePortrait()
+    BackHandler(enabled = isPhonePortrait || inPills) { onBack() }
+    BackHandler(enabled = !isPhonePortrait && !inPills) { runCatching { pillFocus.requestFocus() } }
 
     val map = if (mode == 0) req.infinity else req.provider
     val entries = remember(map, az, saved, CatOrder.version, req.recent, req.watch) {
@@ -118,53 +120,172 @@ fun CategoriesScreen(
             }
             Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(Bg.copy(alpha = .97f), Bg.copy(alpha = .6f)))))
         }
-        Column(Modifier.fillMaxSize().sidebarPad().padding(horizontal = 32.dp, vertical = DS.PageY)) {
-            Text(req.title, color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.ExtraBold)
-            Spacer(Modifier.height(10.dp))
-            Box(Modifier.onFocusChanged { inPills = it.hasFocus }) {
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    // Provider categories first; the choice is saved (same setting as "Automatic genres")
-                    val modes = listOf("Anbieter-Kategorien", "Auto-Genres")
+        if (isPhonePortrait) {
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .statusBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                // Header with back button and count
+                Row(
+                    Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(Color(0x28FFFFFF))
+                            .clickable { onBack() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        AppIcon(AIcon.Left, Color.White, size = 18.dp)
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = req.title,
+                            color = Color.White,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = "${entries.size} " + Lang.tr("Kategorien"),
+                            color = Color(0xFFA0A0A8),
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+
+                // Filter & Sort horizontal pills
+                Row(
+                    Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val modes = listOf("Provider", "Auto-Genres")
                     val sel = if (mode == 0) 1 else 0
-                    DropdownPill("Filter", modes[sel], modes, sel, modifier = Modifier.focusRequester(pillFocus), icon = FIcon.Genre) {
+                    DropdownPill("Filter", modes[sel], modes, sel, icon = FIcon.Genre) {
                         mode = if (it == 1) 0 else 1
                         AppSettings.set(ctx, mode == 0)
                     }
                     if (saved && area != null) {
-                        val sorts = listOf("Standard", "A–Z", "Eigene Reihenfolge")
+                        val sorts = listOf("Standard", "A–Z", "Eigene")
                         val si = CatOrder.mode(area).coerceIn(0, 2)
-                        DropdownPill("Sortierung", sorts[si], sorts, si, icon = FIcon.Sort) { CatOrder.setMode(ctx, area, it) }
+                        DropdownPill("Sort", sorts[si], sorts, si, icon = FIcon.Sort) { CatOrder.setMode(ctx, area, it) }
                     } else {
                         val sorts = listOf("Standard", "A–Z")
-                        DropdownPill("Sortierung", sorts[if (az) 1 else 0], sorts, if (az) 1 else 0, icon = FIcon.Sort) { az = it == 1 }
+                        DropdownPill("Sort", sorts[if (az) 1 else 0], sorts, if (az) 1 else 0, icon = FIcon.Sort) { az = it == 1 }
                     }
-                    val views = listOf("Liste", "Kacheln")
-                    DropdownPill("Ansicht", views[if (CatPrefs.listView) 0 else 1], views, if (CatPrefs.listView) 0 else 1, icon = FIcon.View) { CatPrefs.set(ctx, it == 0) }
-                    if (CatPrefs.listView) {
-                        val pr = listOf(0, 4, 5, 6, 7)
-                        val prl = pr.map { if (it == 0) "Auto (5)" else "$it" }
-                        val pi = pr.indexOf(General.perRow).let { if (it < 0) 0 else it }
-                        DropdownPill("Spalten", prl[pi], prl, pi, icon = FIcon.View) { General.setPerRow(ctx, pr[it]) }
+                }
+
+                Spacer(Modifier.height(8.dp))
+
+                // Full-width vertical list of categories
+                val catSort = if (mode == 0) 2 else req.sort
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = PaddingValues(top = 4.dp, bottom = 120.dp)
+                ) {
+                    itemsIndexed(entries, key = { i, e -> e.first + "#" + i }) { _, e ->
+                        val all = if (isTopEntry(e.first)) e.second else StalkerMore.withAdded(e.first, e.second)
+                        val count = StalkerMore.total(ctx, e.first, setOfNotNull(e.second.firstOrNull()?.kind)) ?: all.size
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color(0x18FFFFFF))
+                                .clickable { onPick(e.first, all, sortFor(e.first, catSort)) }
+                                .padding(horizontal = 16.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = e.first,
+                                color = Color.White,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.weight(1f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Box(
+                                Modifier
+                                    .clip(RoundedCornerShape(50))
+                                    .background(Color(0x22FFFFFF))
+                                    .padding(horizontal = 10.dp, vertical = 3.dp)
+                            ) {
+                                Text(
+                                    text = "$count",
+                                    color = Color(0xFFD0D0D6),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                            Spacer(Modifier.width(8.dp))
+                            AppIcon(AIcon.Right, Color(0x66FFFFFF), size = 16.dp)
+                        }
                     }
-                    Text("${entries.size} Kategorien", color = Muted, fontSize = 14.sp)
                 }
             }
-            Spacer(Modifier.height(12.dp))
-            if (mode == 0 && req.infinity.isEmpty()) AutoGenresOff()
-            else {
-                if (mode == 0 && Classifier.running) Text("Genres werden gerade im Hintergrund erkannt. Die Kategorien erscheinen nach und nach.", color = Muted, fontSize = 14.sp, modifier = Modifier.padding(bottom = 8.dp))
-                // Auto genres: titles sorted by rating (best first); provider categories keep their sorting
-                val catSort = if (mode == 0) 2 else req.sort
-                // Menu key / long OK on a provider category: move it (switches to the own order)
-                val onMove: ((String, Int) -> Unit)? = if (saved && area != null) { name, how ->
-                    val names = map.keys.toList()
-                    if (how == 0) CatOrder.toTop(ctx, area, names, name) else CatOrder.move(ctx, area, names, name, how)
-                } else null
-                if (CatPrefs.listView) ListMode(req.title, entries, catSort, firstFocus, pillFocus, onPick, onOpen, onMove) { bgItem = it }
-                else TileMode(entries, catSort, firstFocus, onPick)
+        } else {
+            Column(Modifier.fillMaxSize().sidebarPad(true).padding(start = 32.dp, end = 32.dp, top = DS.PageY, bottom = DS.PageY)) {
+                Text(req.title, color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.ExtraBold)
+                Spacer(Modifier.height(10.dp))
+                Box(Modifier.onFocusChanged { inPills = it.hasFocus }) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        // Provider categories first; the choice is saved (same setting as "Automatic genres")
+                        val modes = listOf("Anbieter-Kategorien", "Auto-Genres")
+                        val sel = if (mode == 0) 1 else 0
+                        DropdownPill("Filter", modes[sel], modes, sel, modifier = Modifier.focusRequester(pillFocus), icon = FIcon.Genre) {
+                            mode = if (it == 1) 0 else 1
+                            AppSettings.set(ctx, mode == 0)
+                        }
+                        if (saved && area != null) {
+                            val sorts = listOf("Standard", "A–Z", "Eigene Reihenfolge")
+                            val si = CatOrder.mode(area).coerceIn(0, 2)
+                            DropdownPill("Sortierung", sorts[si], sorts, si, icon = FIcon.Sort) { CatOrder.setMode(ctx, area, it) }
+                        } else {
+                            val sorts = listOf("Standard", "A–Z")
+                            DropdownPill("Sortierung", sorts[if (az) 1 else 0], sorts, if (az) 1 else 0, icon = FIcon.Sort) { az = it == 1 }
+                        }
+                        val views = listOf("Liste", "Kacheln")
+                        DropdownPill("Ansicht", views[if (CatPrefs.listView) 0 else 1], views, if (CatPrefs.listView) 0 else 1, icon = FIcon.View) { CatPrefs.set(ctx, it == 0) }
+                        if (CatPrefs.listView) {
+                            val pr = listOf(0, 4, 5, 6, 7)
+                            val prl = pr.map { if (it == 0) "Auto (5)" else "$it" }
+                            val pi = pr.indexOf(General.perRow).let { if (it < 0) 0 else it }
+                            DropdownPill("Spalten", prl[pi], prl, pi, icon = FIcon.View) { General.setPerRow(ctx, pr[it]) }
+                        }
+                        Text("${entries.size} Kategorien", color = Muted, fontSize = 14.sp)
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+                if (mode == 0 && req.infinity.isEmpty()) AutoGenresOff()
+                else {
+                    if (mode == 0 && Classifier.running) Text("Genres werden gerade im Hintergrund erkannt. Die Kategorien erscheinen nach und nach.", color = Muted, fontSize = 14.sp, modifier = Modifier.padding(bottom = 8.dp))
+                    // Auto genres: titles sorted by rating (best first); provider categories keep their sorting
+                    val catSort = if (mode == 0) 2 else req.sort
+                    // Menu key / long OK on a provider category: move it (switches to the own order)
+                    val onMove: ((String, Int) -> Unit)? = if (saved && area != null) { name, how ->
+                        val names = map.keys.toList()
+                        if (how == 0) CatOrder.toTop(ctx, area, names, name) else CatOrder.move(ctx, area, names, name, how)
+                    } else null
+                    if (CatPrefs.listView) ListMode(req.title, entries, catSort, firstFocus, pillFocus, onPick, onOpen, onMove) { bgItem = it }
+                    else TileMode(entries, catSort, firstFocus, onPick)
+                }
             }
         }
-        Sidebar(tab, onGoTab, Modifier.align(SidebarPrefs.align()), sideFocus) { inSidebar = it }
+        if (isPhonePortrait) {
+            TwoTabsBar(tab, onGoTab, Modifier.align(Alignment.BottomCenter), showUpper = false)
+        } else {
+            Sidebar(tab, onGoTab, Modifier.align(SidebarPrefs.align()), sideFocus) { inSidebar = it }
+        }
     }
 }
 

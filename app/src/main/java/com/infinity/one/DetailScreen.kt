@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -32,6 +33,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -422,14 +424,24 @@ private fun DetailScreenFull(
         }
     }
 
+    val isPhonePortrait = DeviceMode.isPhonePortrait()
     Box(Modifier.fillMaxSize().background(Bg)) {
         val backdrop = meta?.backdrop?.takeIf { it.isNotBlank() }
         val poster = meta?.poster?.takeIf { it.isNotBlank() } ?: item.logo?.takeIf { it.isNotBlank() }
         CinematicBackdrop(backdrop, poster, item, Modifier.fillMaxSize())
-        LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(horizontal = 28.dp, vertical = 36.dp)) {
+        LazyColumn(
+            Modifier.fillMaxSize(),
+            state = listState,
+            contentPadding = PaddingValues(
+                start = if (isPhonePortrait) 16.dp else 28.dp,
+                end = if (isPhonePortrait) 16.dp else 28.dp,
+                top = if (isPhonePortrait) 170.dp else 36.dp,
+                bottom = if (isPhonePortrait) 80.dp else 36.dp
+            )
+        ) {
             item {
                 Box(
-                    Modifier.fillMaxWidth().heightIn(min = dpx(if (embedded) 400 else 560))
+                    Modifier.fillMaxWidth().heightIn(min = if (isPhonePortrait) 260.dp else dpx(if (embedded) 400 else 560))
                         .onPreviewKeyEvent { ev ->
                             if (ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionUp) {
                                 if (onTopUp != null) {
@@ -446,28 +458,60 @@ private fun DetailScreenFull(
                         }
                         .onFocusChanged { heroFocused = it.hasFocus }
                 ) {
-                    Column(Modifier.align(if (embedded && !showActions) Alignment.TopStart else Alignment.BottomStart).widthIn(max = dpx(980)).padding(bottom = dpx(18)), verticalArrangement = Arrangement.spacedBy(dpx(12))) {
-                        // Round 17b: overline with glow bar, huge title (design "Cinematic Remake", picture 2)
-                        Row(horizontalArrangement = Arrangement.spacedBy(dpx(14)), verticalAlignment = Alignment.CenterVertically) {
+                    Column(
+                        Modifier
+                            .align(if (embedded && !showActions) Alignment.TopStart else Alignment.BottomStart)
+                            .then(if (isPhonePortrait) Modifier.fillMaxWidth().padding(bottom = 12.dp) else Modifier.widthIn(max = dpx(980)).padding(bottom = dpx(18))),
+                        horizontalAlignment = if (isPhonePortrait) Alignment.CenterHorizontally else Alignment.Start,
+                        verticalArrangement = Arrangement.spacedBy(if (isPhonePortrait) 8.dp else dpx(12))
+                    ) {
+                        // Kicker and Quality
+                        Row(
+                            modifier = if (isPhonePortrait) Modifier.fillMaxWidth() else Modifier,
+                            horizontalArrangement = if (isPhonePortrait) Arrangement.Center else Arrangement.spacedBy(dpx(14)),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             Kicker(kindLabel(item.kind), raw = false)
-                            qualityOf(item)?.let { PreviewQualityBadge(it) }
+                            qualityOf(item)?.let {
+                                Spacer(Modifier.width(6.dp))
+                                PreviewQualityBadge(it)
+                            }
                         }
-                        Text(raw = true, text = item.title, color = Tok.TextHi, fontSize = spx(84), lineHeight = spx(84), fontWeight = FontWeight.ExtraBold,
-                            letterSpacing = (-1.5).sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        HeroMetaLine(item, meta, dots = false)
+                        Text(
+                            raw = true,
+                            text = item.title,
+                            color = Tok.TextHi,
+                            fontSize = if (isPhonePortrait) 26.sp else spx(84),
+                            lineHeight = if (isPhonePortrait) 30.sp else spx(84),
+                            fontWeight = FontWeight.ExtraBold,
+                            textAlign = if (isPhonePortrait) TextAlign.Center else TextAlign.Start,
+                            modifier = if (isPhonePortrait) Modifier.fillMaxWidth() else Modifier,
+                            letterSpacing = (-1.5).sp,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        HeroMetaLine(item, meta, dots = isPhonePortrait, centered = isPhonePortrait)
                         // Movie started: small progress bar with remaining time
                         if (item.kind != Kind.SERIES && resume != null && resume.dur > 0 && !ResumeLogic.finished(resume.pos, resume.dur)) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(dpx(10))) {
-                                Box(Modifier.width(dpx(180)).height(dpx(4)).clip(RoundedCornerShape(50)).background(Color(0x40FFFFFF))) {
+                            Row(
+                                modifier = if (isPhonePortrait) Modifier.fillMaxWidth() else Modifier,
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = if (isPhonePortrait) Arrangement.Center else Arrangement.spacedBy(dpx(10))
+                            ) {
+                                Box(Modifier.width(if (isPhonePortrait) 160.dp else dpx(180)).height(if (isPhonePortrait) 4.dp else dpx(4)).clip(RoundedCornerShape(50)).background(Color(0x40FFFFFF))) {
                                     Box(Modifier.fillMaxWidth((resume.pos.toFloat() / resume.dur).coerceIn(0f, 1f)).fillMaxHeight().background(Accent2))
                                 }
-                                Text("noch " + ((resume.dur - resume.pos) / 60000).coerceAtLeast(1) + " Min", color = Muted, fontSize = spx(14))
+                                Text("noch " + ((resume.dur - resume.pos) / 60000).coerceAtLeast(1) + " Min", color = Muted, fontSize = if (isPhonePortrait) 12.sp else spx(14))
                             }
                         }
                         if (meta?.overview == null && !metaDone) {
                             // Loading skeleton instead of briefly "No description found."
                             val sk = shimmerColor()
-                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Column(
+                                modifier = if (isPhonePortrait) Modifier.fillMaxWidth() else Modifier,
+                                horizontalAlignment = if (isPhonePortrait) Alignment.CenterHorizontally else Alignment.Start,
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
                                 SkeletonBox(Modifier.fillMaxWidth(0.92f).height(16.dp), sk)
                                 SkeletonBox(Modifier.fillMaxWidth(0.86f).height(16.dp), sk)
                                 SkeletonBox(Modifier.fillMaxWidth(0.6f).height(16.dp), sk)
@@ -475,9 +519,11 @@ private fun DetailScreenFull(
                         } else Text(
                             raw = cleanOverview(meta?.overview) != null,
                             text = cleanOverview(meta?.overview) ?: Lang.tr("Keine Beschreibung vorhanden."),
-                            color = Tok.TextMid, fontSize = spx(17), lineHeight = spx(25),
-                            // Short and medium descriptions (up to about 800 characters) are shown completely, without "Read more".
-                            // In the cinema preview (without buttons) it is at most 6 lines.
+                            color = Tok.TextMid,
+                            fontSize = if (isPhonePortrait) 14.sp else spx(17),
+                            lineHeight = if (isPhonePortrait) 20.sp else spx(25),
+                            textAlign = if (isPhonePortrait) TextAlign.Center else TextAlign.Start,
+                            modifier = if (isPhonePortrait) Modifier.fillMaxWidth() else Modifier,
                             maxLines = if (descExpanded || (showActions && (meta?.overview?.length ?: 0) <= FULL_TEXT_CHARS)) Int.MAX_VALUE
                                 else if (!showActions) 8 else 4,
                             overflow = TextOverflow.Ellipsis,
@@ -488,6 +534,96 @@ private fun DetailScreenFull(
                         }
                         if (showActions) {
                         Spacer(Modifier.height(4.dp))
+                        if (isPhonePortrait) {
+                            val seenMovie = item.kind == Kind.MOVIE && progress[ResumeLogic.key(0, 0)]?.done == true
+                            val primaryLabel = when {
+                                resume != null -> {
+                                    val oneSeason = seasons.size <= 1
+                                    when {
+                                        item.kind != Kind.SERIES -> Lang.tr("Fortsetzen · ") + (resume.pos / 60000) + " Min"
+                                        resumeSE == null -> Lang.tr("Fortsetzen")
+                                        resume.next -> Lang.tr("Weiter mit ") + (if (oneSeason) "Folge ${resumeSE.second}" else "S${resumeSE.first} · Folge ${resumeSE.second}")
+                                        else -> Lang.tr("Fortsetzen · ") + (if (oneSeason) "Folge ${resumeSE.second}" else "S${resumeSE.first} · Folge ${resumeSE.second}")
+                                    }
+                                }
+                                seenMovie -> Lang.tr("Erneut abspielen")
+                                else -> Lang.tr("Abspielen")
+                            }
+
+                            Column(
+                                modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+                                verticalArrangement = Arrangement.spacedBy(14.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(48.dp)
+                                        .clip(RoundedCornerShape(24.dp))
+                                        .background(Color.White)
+                                        .clickable {
+                                            if (resume != null) {
+                                                val t = WatchStore.target(ctx, item, resume)
+                                                onPlay(t.second, t.first, resume.pos)
+                                            } else {
+                                                playUrl?.let { onPlay(it, item.title + (if (item.kind == Kind.SERIES) " S" + season + "E" + (eps.firstOrNull()?.num ?: 1) else ""), 0L) }
+                                            }
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        AppIcon(AIcon.Play, Color.Black, size = 20.dp)
+                                        Text(primaryLabel, color = Color.Black, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceEvenly,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    val fav = Library.isFav(item.id)
+                                    MobileActionItem(
+                                        icon = if (fav) AIcon.HeartFilled else AIcon.Heart,
+                                        label = if (fav) Lang.tr("Favorit") else Lang.tr("Favoriten"),
+                                        tint = if (fav) Color(0xFFFF5252) else Color.White
+                                    ) { Library.toggleFav(ctx, item.id) }
+
+                                    MobileActionItem(
+                                        icon = AIcon.Play,
+                                        label = Lang.tr("Trailer"),
+                                        tint = Color.White
+                                    ) { openTrailer(ctx, meta?.trailerKey, item.title) }
+
+                                    MobileActionItem(
+                                        icon = AIcon.External,
+                                        label = Lang.tr("Extern"),
+                                        tint = Color.White
+                                    ) { playUrl?.let { openExternal(ctx, it, item.title) } }
+
+                                    if (resume != null) {
+                                        MobileActionItem(
+                                            icon = AIcon.Rewind,
+                                            label = Lang.tr("Von vorn"),
+                                            tint = Color.White
+                                        ) { playUrl?.let { onPlay(it, item.title + (if (item.kind == Kind.SERIES) " S" + season + "E" + (eps.firstOrNull()?.num ?: 1) else ""), 0L) } }
+                                    } else {
+                                        val k = ResumeLogic.key(0, 0)
+                                        val seen = progress[k]?.done == true
+                                        MobileActionItem(
+                                            icon = if (seen) AIcon.Rewind else AIcon.Check,
+                                            label = if (seen) Lang.tr("Ungesehen") else Lang.tr("Gesehen"),
+                                            tint = Color.White
+                                        ) {
+                                            EpProgress.mark(ctx, item.id, listOf(k), !seen)
+                                            progVer++
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
                         // Buttons in the style of the big picture, smaller (round 15). Padding: the enlarged button would otherwise be cut off.
                         // Two rows: Play/Resume/From start on top, below List, Favorite, Trailer, External. So nothing is
                         // cut off at the right edge any more. Padding: the enlarged button would otherwise be cropped.
@@ -565,19 +701,39 @@ private fun DetailScreenFull(
                                 }
                             }
                         }
-                        if (item.kind == Kind.MOVIE && movieAlts.size > 1) Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                            // Choose the source explicitly (takes precedence over quality) or automatically to suit the device
-                            val so = listOf("Automatisch") + movieVars.map { it.label }
-                            DropdownPill("Quelle", prefLabel ?: "Automatisch", so, so.indexOf(prefLabel).coerceAtLeast(0), active = prefLabel != null) {
-                                prefLabel = if (it == 0) null else so[it]; save()
-                            }
-                            if (movieQs.size > 1 && prefLabel == null) {
-                                val qo = listOf("Automatisch (passend zum Gerät)") + movieQs
-                                DropdownPill("Qualität", prefQ ?: "Automatisch", qo, qo.indexOf(prefQ).coerceAtLeast(0), active = prefQ != null) {
-                                    prefQ = if (it == 0) null else qo[it]; save()
+                        }
+                        if (item.kind == Kind.MOVIE && movieAlts.size > 1) {
+                            if (isPhonePortrait) {
+                                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        val so = listOf("Automatisch") + movieVars.map { it.label }
+                                        DropdownPill("Quelle", prefLabel ?: "Automatisch", so, so.indexOf(prefLabel).coerceAtLeast(0), active = prefLabel != null) {
+                                            prefLabel = if (it == 0) null else so[it]; save()
+                                        }
+                                        if (movieQs.size > 1 && prefLabel == null) {
+                                            val qo = listOf("Automatisch (passend zum Gerät)") + movieQs
+                                            DropdownPill("Qualität", prefQ ?: "Automatisch", qo, qo.indexOf(prefQ).coerceAtLeast(0), active = prefQ != null) {
+                                                prefQ = if (it == 0) null else qo[it]; save()
+                                            }
+                                        }
+                                    }
+                                    Text("${movieAlts.size} Quellen · bei Störung wird automatisch gewechselt", color = Muted, fontSize = 12.sp)
+                                }
+                            } else {
+                                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    val so = listOf("Automatisch") + movieVars.map { it.label }
+                                    DropdownPill("Quelle", prefLabel ?: "Automatisch", so, so.indexOf(prefLabel).coerceAtLeast(0), active = prefLabel != null) {
+                                        prefLabel = if (it == 0) null else so[it]; save()
+                                    }
+                                    if (movieQs.size > 1 && prefLabel == null) {
+                                        val qo = listOf("Automatisch (passend zum Gerät)") + movieQs
+                                        DropdownPill("Qualität", prefQ ?: "Automatisch", qo, qo.indexOf(prefQ).coerceAtLeast(0), active = prefQ != null) {
+                                            prefQ = if (it == 0) null else qo[it]; save()
+                                        }
+                                    }
+                                    Text("${movieAlts.size} Quellen · bei Störung wird automatisch gewechselt", color = Muted, fontSize = 13.sp)
                                 }
                             }
-                            Text("${movieAlts.size} Quellen · bei Störung wird automatisch gewechselt", color = Muted, fontSize = 13.sp)
                         }
                         if (item.kind != Kind.SERIES && DeadLinks.isDead(item.url)) IconLabel(
                             AIcon.Warning,
@@ -615,14 +771,14 @@ private fun DetailScreenFull(
                             ) {
                                 if (dirList.isNotEmpty()) {
                                     Row(horizontalArrangement = Arrangement.spacedBy(dpx(8)), verticalAlignment = Alignment.CenterVertically) {
-                                        Text(Lang.tr("Regie") + ":", color = Color.White.copy(alpha = 0.65f), fontSize = spx(14), fontWeight = FontWeight.Medium)
-                                        Text(dirList.joinToString(", "), color = Color.White, fontSize = spx(14), fontWeight = FontWeight.SemiBold)
+                                        Text(Lang.tr("Regie") + ":", color = Color.White.copy(alpha = 0.65f), fontSize = if (isPhonePortrait) 13.sp else spx(14), fontWeight = FontWeight.Medium)
+                                        Text(dirList.joinToString(", "), color = Color.White, fontSize = if (isPhonePortrait) 13.sp else spx(14), fontWeight = FontWeight.SemiBold)
                                     }
                                 }
                                 if (castList.isNotEmpty()) {
-                                    Row(horizontalArrangement = Arrangement.spacedBy(dpx(8)), verticalAlignment = Alignment.CenterVertically) {
-                                        Text(Lang.tr("Besetzung") + ":", color = Color.White.copy(alpha = 0.65f), fontSize = spx(14), fontWeight = FontWeight.Medium)
-                                        Text(castList.take(8).joinToString(", "), color = Color.White, fontSize = spx(14), fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Row(horizontalArrangement = Arrangement.spacedBy(dpx(8)), verticalAlignment = Alignment.Top) {
+                                        Text(Lang.tr("Besetzung") + ":", color = Color.White.copy(alpha = 0.65f), fontSize = if (isPhonePortrait) 13.sp else spx(14), fontWeight = FontWeight.Medium)
+                                        Text(castList.take(8).joinToString(", "), color = Color.White, fontSize = if (isPhonePortrait) 13.sp else spx(14), fontWeight = FontWeight.SemiBold, maxLines = if (isPhonePortrait) 2 else 1, overflow = TextOverflow.Ellipsis)
                                     }
                                 }
                             }
@@ -632,6 +788,55 @@ private fun DetailScreenFull(
                 }
             }
             if (item.kind == Kind.SERIES) item(key = "eppane") {
+                if (isPhonePortrait) {
+                    Column(Modifier.fillMaxWidth().padding(top = 16.dp)) {
+                        if (seasons.size > 1) {
+                            LazyRow(
+                                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                items(seasons, key = { it }) { sn ->
+                                    val isCur = sn == season
+                                    val cnt = remember(item.id, sn) { item.episodes.count { it.season == sn } }
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(50))
+                                            .background(if (isCur) Color.White else Color(0x28FFFFFF))
+                                            .clickable { season = sn }
+                                            .padding(horizontal = 14.dp, vertical = 7.dp)
+                                    ) {
+                                        Text(
+                                            text = Lang.tr("Staffel ") + sn + " ($cnt)",
+                                            color = if (isCur) Color.Black else Color(0xDDFFFFFF),
+                                            fontSize = 13.sp,
+                                            fontWeight = if (isCur) FontWeight.Bold else FontWeight.Medium
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            val epsInSeason = remember(season, item.episodes) {
+                                item.episodes.filter { it.season == season }.sortedBy { it.num }
+                            }
+                            epsInSeason.forEach { ep ->
+                                val v = pick(ep)
+                                EpisodeRow(
+                                    ep, null, v, progress[ResumeLogic.key(ep.season, ep.num)],
+                                    Modifier.fillMaxWidth(),
+                                    fallbackPoster = poster,
+                                    onFocus = {},
+                                    onToggleSeen = {
+                                        val k = ResumeLogic.key(ep.season, ep.num)
+                                        val seen = progress[k]?.done == true
+                                        EpProgress.mark(ctx, item.id, listOf(k), !seen)
+                                        progVer++
+                                    }
+                                ) { onPlay(v.url, item.title + " S" + ep.season + "E" + ep.num, 0L) }
+                            }
+                        }
+                    }
+                } else {
                 // Episodes area (round 16): seasons on the left with the shown season marked, episodes on the right.
                 // Right in the episode list = next season, Left = to the season selection.
                 Row(
@@ -735,6 +940,7 @@ private fun DetailScreenFull(
                         }
                     }
                 }
+                }
             }
             credits?.let { c ->
                 if (c.cast.isNotEmpty()) item(key = "cast") { CastRow(c.cast, castState, if (memKey?.startsWith("c:") == true) memKey.drop(2).toIntOrNull() else null, restoreReq) { p -> DetailFocus.last[item.id] = "c:" + p.id; onPerson(PersonRef(p.id, p.name, p.photo, item.id)) } }
@@ -746,6 +952,20 @@ private fun DetailScreenFull(
             if (MetaRepo.enabled()) item {
                 Text("Dieses Produkt verwendet die TMDB-API, wird aber nicht von TMDB unterstützt oder zertifiziert.",
                     color = Muted, fontSize = 13.sp, modifier = Modifier.padding(top = 32.dp))
+            }
+        }
+        if (isPhonePortrait && !embedded) {
+            Box(
+                Modifier
+                    .statusBarsPadding()
+                    .padding(start = 16.dp, top = 8.dp)
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(Color(0x80000000))
+                    .clickable { onBack() },
+                contentAlignment = Alignment.Center
+            ) {
+                AppIcon(AIcon.Left, Color.White, size = 20.dp)
             }
         }
     }
@@ -764,24 +984,24 @@ private fun EpisodeRow(
     onClick: () -> Unit
 ) {
     var f by remember { mutableStateOf(false) }
-    val shape = RoundedCornerShape(dpx(16))
-    // Round 17b: the selected episode floats forward (glass, shadow, slightly larger) instead of a white frame; the others stay calm
+    val isPhone = DeviceMode.isPhonePortrait()
+    val shape = RoundedCornerShape(if (isPhone) 14.dp else dpx(16))
     val sc by androidx.compose.animation.core.animateFloatAsState(if (f) focusScale(1.02f) else 1f, label = "ep")
     val epImg = em?.still?.takeIf { it.isNotBlank() } ?: fallbackPoster?.takeIf { it.isNotBlank() }
     Row(
-        modifier.fillMaxWidth().padding(vertical = dpx(6))
+        modifier.fillMaxWidth().padding(vertical = if (isPhone) 4.dp else dpx(6))
             .graphicsLayer { scaleX = sc; scaleY = sc; transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0.5f) }
             .then(if (f) Modifier.shadow(dpx(24), shape, ambientColor = Tok.Lift, spotColor = Tok.Lift) else Modifier)
-            .clip(shape).background(if (f) Color(0x1FFFFFFF) else Color(0x08FFFFFF))
-            .border(1.dp, if (f) Color(0x33FFFFFF) else Color.Transparent, shape)
+            .clip(shape).background(if (f) Color(0x1FFFFFFF) else Color(0x0EFFFFFF))
+            .border(1.dp, if (f) Color(0x33FFFFFF) else Color(0x12FFFFFF), shape)
             .onFocusChanged { f = it.isFocused; if (it.isFocused) onFocus() }
             .favKeys(onToggleSeen)
             .clickable(onClick = onClick)
-            .padding(dpx(14)),
-        horizontalArrangement = Arrangement.spacedBy(dpx(22)), verticalAlignment = Alignment.CenterVertically
+            .padding(if (isPhone) 10.dp else dpx(14)),
+        horizontalArrangement = Arrangement.spacedBy(if (isPhone) 12.dp else dpx(22)), verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
-            Modifier.width(dpx(300)).height(dpx(169)).clip(RoundedCornerShape(dpx(12)))
+            Modifier.width(if (isPhone) 110.dp else dpx(300)).height(if (isPhone) 64.dp else dpx(169)).clip(RoundedCornerShape(if (isPhone) 10.dp else dpx(12)))
                 .background(Brush.linearGradient(listOf(lerp(Surf2, Accent1, 0.22f), Surf2))),
             contentAlignment = Alignment.Center
         ) {
@@ -790,15 +1010,15 @@ private fun EpisodeRow(
                 // Episode number overlay badge
                 Box(
                     Modifier.align(Alignment.BottomStart)
-                        .padding(dpx(8))
-                        .clip(RoundedCornerShape(dpx(6)))
+                        .padding(if (isPhone) 6.dp else dpx(8))
+                        .clip(RoundedCornerShape(if (isPhone) 4.dp else dpx(6)))
                         .background(Color(0xB3000000))
-                        .padding(horizontal = dpx(8), vertical = dpx(3))
+                        .padding(horizontal = if (isPhone) 6.dp else dpx(8), vertical = if (isPhone) 2.dp else dpx(3))
                 ) {
-                    Text("E${ep.num}", color = Color.White, fontSize = spx(14), fontWeight = FontWeight.Bold)
+                    Text("E${ep.num}", color = Color.White, fontSize = if (isPhone) 11.sp else spx(14), fontWeight = FontWeight.Bold)
                 }
             } else {
-                Text("E${ep.num}", color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.ExtraBold)
+                Text("E${ep.num}", color = Color.White, fontSize = if (isPhone) 18.sp else 26.sp, fontWeight = FontWeight.ExtraBold)
             }
             // Selected: round play button in the middle
             if (f) Box(Modifier.align(Alignment.Center).size(dpx(58)).clip(RoundedCornerShape(50)).background(Color(0xEBF4F6FB)), contentAlignment = Alignment.Center) {
@@ -810,17 +1030,17 @@ private fun EpisodeRow(
                 Box(Modifier.fillMaxWidth(prog.fraction).fillMaxHeight().background(Accent2))
             }
         }
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(raw = true, text = "${ep.num}. ${em?.name ?: ep.title}", color = if (f) Tok.TextHi else Tok.TextMid, fontSize = spx(if (f) 26 else 24), fontWeight = FontWeight.Bold,
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(raw = true, text = "${ep.num}. ${em?.name ?: ep.title}", color = if (f) Tok.TextHi else Tok.TextMid, fontSize = if (isPhone) 15.sp else spx(if (f) 26 else 24), fontWeight = FontWeight.Bold,
                     maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                 v.quality?.let { QualityBadge(it) }
                 em?.imdb?.let { Badge("IMDb $it", Color(0xFFF5C518), Color.Black) }
                 if (em?.imdb == null) em?.rating?.let { RatingBadge(it, Color(0x26FFFFFF)) }
                 em?.runtime?.let { Badge("$it Min") }
             }
-            em?.air?.let { Text(raw = true, text = it, color = Muted, fontSize = spx(16)) }
-            em?.overview?.let { Text(raw = true, text = it, color = if (f) Tok.TextMid else Tok.TextLow, fontSize = spx(18), lineHeight = spx(25), maxLines = 3, overflow = TextOverflow.Ellipsis) }
+            em?.air?.let { Text(raw = true, text = it, color = Muted, fontSize = if (isPhone) 11.sp else spx(16)) }
+            em?.overview?.let { Text(raw = true, text = it, color = if (f) Tok.TextMid else Tok.TextLow, fontSize = if (isPhone) 12.sp else spx(18), lineHeight = if (isPhone) 16.sp else spx(25), maxLines = 2, overflow = TextOverflow.Ellipsis) }
             if (f) Text(if (prog?.done == true) "OK lange drücken = als ungesehen markieren" else "OK lange drücken = als gesehen markieren", color = Muted, fontSize = spx(14))
         }
     }
@@ -856,5 +1076,43 @@ private fun SeasonEntry(season: Int, count: Int, selected: Boolean, modifier: Mo
             Text("Staffel $season", color = if (selected || f) Tok.TextHi else Tok.TextLow, fontSize = spx(26), fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium, maxLines = 1)
             if (selected) Text(text = if (count == 1) "1 Folge" else "$count Folgen", color = Muted, fontSize = spx(15))
         }
+    }
+}
+
+@Composable
+private fun RowScope.MobileActionItem(
+    icon: AIcon,
+    label: String,
+    tint: Color = Color.White,
+    onClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .weight(1f)
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .padding(vertical = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(44.dp)
+                .clip(RoundedCornerShape(50))
+                .background(Color(0x28FFFFFF))
+                .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(50)),
+            contentAlignment = Alignment.Center
+        ) {
+            AppIcon(icon, tint, size = 20.dp)
+        }
+        Text(
+            label,
+            color = Color(0xDDFFFFFF),
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }

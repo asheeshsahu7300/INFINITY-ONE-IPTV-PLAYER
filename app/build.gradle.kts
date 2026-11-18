@@ -36,7 +36,7 @@ android {
         minSdk = 24
         targetSdk = 37
         // Raise both for every release; the GitHub release tag must match versionName (e.g. tag "v1.1").
-        versionCode = 9
+        versionCode = 2
         versionName = "1.0.0"
         // Name under the icon; the debug build overrides it (see buildTypes)
         manifestPlaceholders["appLabel"] = "INFINITY ONE"
@@ -57,15 +57,13 @@ android {
     }
 
     buildTypes {
-        // Test build (Run in Android Studio / debug APK): own app ID, so the private IPVIO app on the TV
-        // is not overwritten. Both apps can be installed side by side (own data, own name).
+        // Debug build: app ID suffix so debug and release can be installed side by side.
         debug {
             applicationIdSuffix = ".test"
             manifestPlaceholders["appLabel"] = "INFINITY ONE"
         }
         release {
             signingConfig = if (hasKeystore) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
-            applicationIdSuffix = ".test"
             manifestPlaceholders["appLabel"] = "INFINITY ONE"
             optimization {
                 // R8 runs over the whole app in the classic way, without packageScope (T-024, ADR 0005). The libraries (Compose,

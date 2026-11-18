@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -372,21 +373,91 @@ fun HomeScreen(
         HeaderTab("Alle $vodNoun", AIcon.Grid, "tb:all$tab") { onBrowse(BrowseReq("Alle $vodNoun", vodBase, SORT_NEW)) }
     ) + importedTabs.map { (src, l, id) -> HeaderTab(src, AIcon.Download, id) { onBrowse(BrowseReq("$src · $vodNoun", l, SORT_NEW)) } }
     var inHeader by remember { mutableStateOf(false) }
+    val isPhonePortrait = DeviceMode.isPhonePortrait()
     val header: @Composable (Modifier) -> Unit = { m ->
-        HeaderBar(
-            m.onFocusChanged { inHeader = it.hasFocus },
-            onSearch = { onTab(4) },
-            onReminder = { r -> byId[r.chId]?.let(onOpen) },
-            onNewEpisode = { id -> byId[id]?.let(onOpen) },
-            // Only one profile: go directly to the profile page of settings (before: general settings)
-            onProfile = { if (Profiles.list.size > 1) picker = true else { SettingsNav.openPage = SettingsNav.PROFILES; onTab(MenuLogic.SETTINGS) } },
-            tabs = navTabs,
-            areaTab = tab,
-            // Round 20: the View button is gone (now in Settings > View), only bell and profile at the top right
-            showView = false,
-            // Without a big picture (no title images yet): the first tab is the target from the sidebar
-            firstIsContent = isVod && ready.isEmpty()
-        )
+        if (isPhonePortrait) {
+            val title = when (tab) {
+                0 -> Lang.tr("For You")
+                1 -> Lang.tr("Filme")
+                2 -> Lang.tr("Serien")
+                3 -> Lang.tr("Live TV")
+                7 -> Lang.tr("Favoriten")
+                8 -> Lang.tr("My Space")
+                4 -> Lang.tr("Suche")
+                5 -> Lang.tr("Einstellungen")
+                else -> "Infinity"
+            }
+            Column(m.fillMaxWidth().statusBarsPadding()) {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = title,
+                        color = Color.White,
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        BellButton(
+                            onReminder = { r -> byId[r.chId]?.let(onOpen) },
+                            onNewEpisode = { id -> byId[id]?.let(onOpen) }
+                        )
+                        ProfileCircle(onClick = { if (Profiles.list.size > 1) picker = true else { SettingsNav.openPage = SettingsNav.PROFILES; onTab(MenuLogic.SETTINGS) } })
+                    }
+                }
+                if (isVod && navTabs.isNotEmpty()) {
+                    LazyRow(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        contentPadding = PaddingValues(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(navTabs) { t ->
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(50))
+                                    .background(Color(0x28FFFFFF))
+                                    .clickable { t.onClick() }
+                                    .padding(horizontal = 14.dp, vertical = 7.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    AppIcon(t.icon, Color.White, size = 15.dp)
+                                    Text(
+                                        text = Lang.tr(t.label),
+                                        color = Color.White,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            HeaderBar(
+                m.onFocusChanged { inHeader = it.hasFocus },
+                onSearch = { onTab(4) },
+                onReminder = { r -> byId[r.chId]?.let(onOpen) },
+                onNewEpisode = { id -> byId[id]?.let(onOpen) },
+                // Only one profile: go directly to the profile page of settings (before: general settings)
+                onProfile = { if (Profiles.list.size > 1) picker = true else { SettingsNav.openPage = SettingsNav.PROFILES; onTab(MenuLogic.SETTINGS) } },
+                tabs = navTabs,
+                areaTab = tab,
+                // Round 20: the View button is gone (now in Settings > View), only bell and profile at the top right
+                showView = false,
+                // Without a big picture (no title images yet): the first tab is the target from the sidebar
+                firstIsContent = isVod && ready.isEmpty()
+            )
+        }
     }
     // Tiles with real images from the own library (round 15): scene image of a top title per area,
     // for favorites and My list a title from it, for Live TV the logos of favorite channels.
@@ -408,10 +479,10 @@ fun HomeScreen(
     }
     val liveLogos = nowChannels.mapNotNull { it.logo }.take(3)
     val tiles = listOf(
-        QuickTile("Live TV", "${live.size} Sender", 3, Color(0xFF6B3A0E), Color(0xFF2B1708), Color(0xFFF59E0B), logos = liveLogos) { onTab(3) },
-        QuickTile("Filme", "${movies.size} Filme", 1, Color(0xFF1E3A8A), Color(0xFF0F1B45), Color(0xFF60A5FA), image = tileImg[1]) { onTab(1) },
-        QuickTile("Serien", "${series.size} Serien", 2, Color(0xFF4C1D95), Color(0xFF22104A), Color(0xFFC084FC), image = tileImg[2]) { onTab(2) },
-        QuickTile("Favoriten", "Deine Auswahl", 7, Color(0xFF7F1D1D), Color(0xFF3A0B0B), Color(0xFFFB7185), image = tileImg[MenuLogic.FAVS]) { onTab(MenuLogic.FAVS) }
+        QuickTile(Lang.tr("Live TV"), "${live.size} " + Lang.tr("Sender"), 3, Color(0xFF6B3A0E), Color(0xFF2B1708), Color(0xFFF59E0B), logos = liveLogos) { onTab(3) },
+        QuickTile(Lang.tr("Filme"), "${movies.size} " + Lang.tr("Filme"), 1, Color(0xFF1E3A8A), Color(0xFF0F1B45), Color(0xFF60A5FA), image = tileImg[1]) { onTab(1) },
+        QuickTile(Lang.tr("Serien"), "${series.size} " + Lang.tr("Serien"), 2, Color(0xFF4C1D95), Color(0xFF22104A), Color(0xFFC084FC), image = tileImg[2]) { onTab(2) },
+        QuickTile(Lang.tr("Favoriten"), Lang.tr("Deine Auswahl"), 7, Color(0xFF7F1D1D), Color(0xFF3A0B0B), Color(0xFFFB7185), image = tileImg[MenuLogic.FAVS]) { onTab(MenuLogic.FAVS) }
     )
     DisposableEffect(Unit) { onDispose { HomeReturn.returning = true } }
 
@@ -566,10 +637,10 @@ fun HomeScreen(
     val bbA: () -> Float = remember(bbAnim) { { bbAnim.value } }
     val pivotSpec = remember(tab) { PivotSpec(0.52f) { states[tab.coerceIn(0, states.lastIndex)] } }
     Box(Modifier.fillMaxSize()) {
-        if (bbTab) BillboardLayer(bbA, bbItemState, Modifier.padding(start = SideStart + dpx(56), top = dpx(64) + (if (SidebarPrefs.pos == SidebarPrefs.TOP) TopBarH else 0.dp)))
-        BoxWithConstraints(Modifier.fillMaxSize().sidebarPad()) {
+        if (bbTab && !isPhonePortrait) BillboardLayer(bbA, bbItemState, Modifier.padding(start = SideStart + dpx(56), top = dpx(64) + (if (SidebarPrefs.pos == SidebarPrefs.TOP) TopBarH else 0.dp)))
+        BoxWithConstraints(Modifier.fillMaxSize().sidebarPad(!isPhonePortrait)) {
             // Card widths and height of the big picture from the available space (as in the design: everything at a glance)
-            val grid = remember(maxWidth, Design.k, General.cardSize) { cardGrid(maxWidth - RowPadX * 2) }
+            val grid = remember(maxWidth, Design.k, General.cardSize, isPhonePortrait) { cardGrid(maxWidth - RowPadX * 2, isMobile = isPhonePortrait) }
             // Design: big picture 420 px high (start), 345 px (movies/series)
             val heroH = dpx(if (tab == 0) 540 else 450)
             val keepSettings = AddFlowLogic.keepsSettingsPage(tab, PlaylistStore.lists.isNotEmpty())
@@ -581,8 +652,9 @@ fun HomeScreen(
                 // The settings page stays mounted while the list is empty or being rebuilt (e.g. after a playlist mode switch):
                 // replacing it would drop the focus, and the next OK press could land on "Add playlist"
                 !keepSettings && ((PlaylistStore.loading && all.isEmpty()) || computing) -> SkeletonHome()
-                !keepSettings && all.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                !keepSettings && all.isEmpty() -> Box(Modifier.fillMaxSize()) {
+                    if (isPhonePortrait) header(Modifier.align(Alignment.TopCenter))
+                    Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
                         BrandLogo(Modifier.height(54.dp))
                         val err = PlaylistStore.error
                         // Everything hidden (language filter does not fit this playlist): be able to get it back directly
@@ -626,7 +698,7 @@ fun HomeScreen(
                         if (ct > 1f) clipRect(top = ct) { this@drawWithContent.drawContent() } else drawContent()
                     },
                     state = states[tab],
-                    contentPadding = PaddingValues(bottom = dpx(300))
+                    contentPadding = PaddingValues(bottom = if (isPhonePortrait) 150.dp else dpx(300))
                 ) {
                     when (tab) {
                         0 -> {
@@ -637,7 +709,16 @@ fun HomeScreen(
                                     Text("Bearbeiten: Über jeder Reihe kannst du sie verschieben oder ausblenden.", color = Muted, fontSize = 15.sp)
                                 }
                             }
-                            if (ready.isNotEmpty() && HomeLayout.shown("hero")) item(key = "hero") { Hero(ready.toList(), heroH, true, onOpen, onPlayNow, header, { heroScroll(states[0]) }) { scope.launch { states[0].animateScrollToItem(0) } } }
+                            if (ready.isNotEmpty() && HomeLayout.shown("hero")) item(key = "hero") {
+                                if (isPhonePortrait) {
+                                    Column {
+                                        header(Modifier)
+                                        MobileHeroCard(ready.toList(), onOpen, onPlayNow)
+                                    }
+                                } else {
+                                    Hero(ready.toList(), heroH, true, onOpen, onPlayNow, header, { heroScroll(states[0]) }) { scope.launch { states[0].animateScrollToItem(0) } }
+                                }
+                            }
                             else item(key = "top") { header(Modifier) }
                             val wl = wlVod
                             for (blockId in HomeLayout.order) {
@@ -646,7 +727,7 @@ fun HomeScreen(
                                 if (editing) item(key = "eb$blockId") { HomeEditBar(ctx, blockId) }
                                 if (!HomeLayout.shown(blockId)) continue
                                 when (blockId) {
-                                    "tiles" -> { item(key = "tiles") { QuickTiles(tiles) } }
+                                    "tiles" -> { if (!isPhonePortrait) item(key = "tiles") { QuickTiles(tiles) } }
                                     "clock" -> { item(key = "clock") { ClockWidget() } }
                                     // Continue watching directly under the tiles: whoever watches a lot wants to continue in few clicks
                                     "resume" -> { if (resumeList.isNotEmpty()) item(key = "resume") { ResumeRow(resumeList, cardW, onResume) } }
@@ -687,8 +768,20 @@ fun HomeScreen(
                                 }
                             }
                             if (movies.isEmpty() && series.isEmpty()) {
-                                item { EmptyHint("Diese Playlist enthält keine Filme oder Serien. Live TV findest du links.") }
-                                item { EmptyHint(CONTENT_MODE_HINT.format("Filme oder Serien", "Nur Live TV")) }
+                                if (isPhonePortrait) {
+                                    item {
+                                        Column(
+                                            modifier = Modifier.padding(horizontal = RowPadX, vertical = 12.dp),
+                                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                                        ) {
+                                            EmptyHint("This playlist has no movies or series. You can find Live TV in the tabs above.")
+                                            PillButton("Open Live TV", icon = AIcon.Play) { onTab(3) }
+                                        }
+                                    }
+                                } else {
+                                    item { EmptyHint("Diese Playlist enthält keine Filme oder Serien. Live TV findest du links.") }
+                                    item { EmptyHint(CONTENT_MODE_HINT.format("Filme oder Serien", "Nur Live TV")) }
+                                }
                             }
                         }
                         1, 2 -> {
@@ -698,7 +791,16 @@ fun HomeScreen(
                             val noun = if (isM) "Filme" else "Serien"
                             val kind = if (isM) Kind.MOVIE else Kind.SERIES
                             val groups = if (isM) movieG else seriesG
-                            if (ready.isNotEmpty()) item(key = "hero$tab") { Hero(ready.toList(), heroH, false, onOpen, onPlayNow, header, { heroScroll(states[tab]) }) { scope.launch { states[tab].animateScrollToItem(0) } } }
+                            if (ready.isNotEmpty()) item(key = "hero$tab") {
+                                if (isPhonePortrait) {
+                                    Column {
+                                        header(Modifier)
+                                        MobileHeroCard(ready.toList(), onOpen, onPlayNow)
+                                    }
+                                } else {
+                                    Hero(ready.toList(), heroH, false, onOpen, onPlayNow, header, { heroScroll(states[tab]) }) { scope.launch { states[tab].animateScrollToItem(0) } }
+                                }
+                            }
                             else item(key = "top$tab") { header(Modifier) }
                             // Popular (trending, otherwise top rated) directly under the big picture. First row:
                             // "Show all" up = profile at the top right, left = "To list" in the picture
@@ -762,22 +864,248 @@ fun HomeScreen(
                             item(key = "mltop") { header(Modifier) }
                             val wm = watchList.filter { it.kind == Kind.MOVIE }
                             val ws = watchList.filter { it.kind == Kind.SERIES }
-                            if (wm.isEmpty() && ws.isEmpty()) {
-                                item(key = "mlh") { RowTitle("Meine Liste", null, null, onAll = null) }
-                                item(key = "mle") {
-                                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                                        EmptyState(AIcon.Plus, "Noch nichts in deiner Liste", "Auf der Seite eines Films oder einer Serie „Meine Liste“ wählen.",
-                                            action = "Filme entdecken", actionModifier = Modifier.focusRequester(ContentFocus.req)) { onTab(1) }
+                            val favM = favVod.filter { it.kind == Kind.MOVIE }
+                            val favS = favVod.filter { it.kind == Kind.SERIES }
+                            if (isPhonePortrait) {
+                                // Modern mobile OTT "My Space" hub
+                                item(key = "profileHub") {
+                                    Column(
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                                            .clip(RoundedCornerShape(16.dp))
+                                            .background(Color(0x18FFFFFF))
+                                            .border(1.dp, Color(0x1FFFFFFF), RoundedCornerShape(16.dp))
+                                            .padding(16.dp)
+                                    ) {
+                                        Row(
+                                            Modifier.fillMaxWidth(),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(14.dp)
+                                        ) {
+                                            Box(
+                                                Modifier
+                                                    .size(54.dp)
+                                                    .clip(CircleShape)
+                                                    .background(
+                                                        Brush.linearGradient(
+                                                            listOf(Color(0xFF2979FF), Color(0xFFAA00FF))
+                                                        )
+                                                    ),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                AppIcon(AIcon.Person, Color.White, size = 28.dp)
+                                            }
+                                            Column(Modifier.weight(1f)) {
+                                                Text(
+                                                    text = Profiles.list.firstOrNull { it.id == Profiles.active }?.name ?: "Profile",
+                                                    color = Color.White,
+                                                    fontSize = 18.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                                Text(
+                                                    text = "${live.size} Channels · ${movies.size} Movies",
+                                                    color = Muted,
+                                                    fontSize = 12.sp
+                                                )
+                                            }
+                                            Box(
+                                                Modifier
+                                                    .clip(RoundedCornerShape(50))
+                                                    .background(Color(0x28FFFFFF))
+                                                    .clickable {
+                                                        if (Profiles.list.size > 1) picker = true
+                                                        else { SettingsNav.openPage = SettingsNav.PROFILES; onTab(MenuLogic.SETTINGS) }
+                                                    }
+                                                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                                            ) {
+                                                Text(
+                                                    text = Lang.tr("Wechseln"),
+                                                    color = Color.White,
+                                                    fontSize = 12.sp,
+                                                    fontWeight = FontWeight.SemiBold
+                                                )
+                                            }
+                                        }
+
+                                        Spacer(Modifier.height(14.dp))
+                                        Row(
+                                            Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            listOf(
+                                                "Watchlist" to watchList.size,
+                                                "Favorites" to (favLive.size + favM.size + favS.size),
+                                                "History" to hist.size
+                                            ).forEach { (lbl, cnt) ->
+                                                Box(
+                                                    Modifier
+                                                        .weight(1f)
+                                                        .clip(RoundedCornerShape(10.dp))
+                                                        .background(Color(0x12FFFFFF))
+                                                        .padding(vertical = 8.dp),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                                        Text("$cnt", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                                                        Text(lbl, color = Muted, fontSize = 11.sp)
+                                                    }
+                                                }
+                                            }
+                                        }
                                     }
                                 }
-                            }
-                            if (wm.isNotEmpty()) {
-                                item(key = "mlmh") { RowTitle("Meine Liste · Filme", null, null, onAll = null) }
-                                cardGridItems("mlm", wm, CARD_POSTER, ContentFocus.req, onOpen)
-                            }
-                            if (ws.isNotEmpty()) {
-                                item(key = "mlsh") { RowTitle("Meine Liste · Serien", null, null, onAll = null) }
-                                cardGridItems("mls", ws, CARD_POSTER, if (wm.isEmpty()) ContentFocus.req else null, onOpen)
+
+                                // 1. Continue watching (Movies & Series)
+                                val recentVod = hist.filter { it.kind != Kind.LIVE }
+                                val recentLive = hist.filter { it.kind == Kind.LIVE }
+                                if (recentVod.isNotEmpty()) {
+                                    item(key = "msRecentVod") {
+                                        ItemsRow("Continue Watching", recentVod.take(15), cardW, onOpen) { onTab(MenuLogic.VERLAUF) }
+                                    }
+                                }
+                                if (recentLive.isNotEmpty()) {
+                                    item(key = "msRecentLive") {
+                                        ItemsRow("Recent Channels", recentLive.take(15), cardW, onOpen) { onTab(3) }
+                                    }
+                                }
+
+                                // 2. Watchlist
+                                if (watchList.isNotEmpty()) {
+                                    item(key = "msWl") {
+                                        ItemsRow("Watchlist", watchList, cardW, onOpen) { }
+                                    }
+                                } else {
+                                    item(key = "msWlEmpty") {
+                                        Column(
+                                            Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 16.dp, vertical = 8.dp)
+                                                .clip(RoundedCornerShape(14.dp))
+                                                .background(Color(0x12FFFFFF))
+                                                .padding(16.dp),
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            AppIcon(AIcon.Plus, Color.White, size = 28.dp)
+                                            Text(
+                                                text = "Your Watchlist is empty",
+                                                color = Color.White,
+                                                fontSize = 15.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            Text(
+                                                text = "Add movies and series to watch them later.",
+                                                color = Muted,
+                                                fontSize = 12.sp
+                                            )
+                                            Spacer(Modifier.height(4.dp))
+                                            Row(
+                                                Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                            ) {
+                                                Box(
+                                                    Modifier
+                                                        .weight(1f)
+                                                        .clip(RoundedCornerShape(50))
+                                                        .background(Color.White)
+                                                        .clickable { onTab(1) }
+                                                        .padding(vertical = 10.dp),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                                        AppIcon(AIcon.Play, Color.Black, size = 15.dp)
+                                                        Text("Browse Movies", color = Color.Black, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                                    }
+                                                }
+                                                Box(
+                                                    Modifier
+                                                        .weight(1f)
+                                                        .clip(RoundedCornerShape(50))
+                                                        .background(Color(0x28FFFFFF))
+                                                        .clickable { onTab(2) }
+                                                        .padding(vertical = 10.dp),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                                        AppIcon(AIcon.Play, Color.White, size = 15.dp)
+                                                        Text("Browse Series", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // 3. Favorite Channels
+                                if (favLive.isNotEmpty()) {
+                                    item(key = "msFavCh") {
+                                        ItemsRow("Favorite Channels", favLive, cardW, onOpen) { onTab(3) }
+                                    }
+                                }
+
+                                // 4. Quick Account & Settings links
+                                item(key = "msSettings") {
+                                    Column(
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Text(
+                                            text = "Settings & Preferences",
+                                            color = Color.White,
+                                            fontSize = 16.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.padding(bottom = 4.dp)
+                                        )
+                                        listOf(
+                                            Triple(AIcon.Gear, "Settings", "App, Player & Subtitles") to { onTab(MenuLogic.SETTINGS) },
+                                            Triple(AIcon.Lists, "Playlists", "Manage IPTV playlists and sources") to { onTab(MenuLogic.SETTINGS) },
+                                            Triple(AIcon.Person, "Profiles", "Switch or edit viewer profiles") to {
+                                                if (Profiles.list.size > 1) picker = true
+                                                else { SettingsNav.openPage = SettingsNav.PROFILES; onTab(MenuLogic.SETTINGS) }
+                                            }
+                                        ).forEach { (info, action) ->
+                                            val (icon, name, sub) = info
+                                            Row(
+                                                Modifier
+                                                    .fillMaxWidth()
+                                                    .clip(RoundedCornerShape(12.dp))
+                                                    .background(Color(0x14FFFFFF))
+                                                    .clickable(onClick = action)
+                                                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                            ) {
+                                                AppIcon(icon, Color.White, size = 20.dp)
+                                                Column(Modifier.weight(1f)) {
+                                                    Text(name, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                                                    Text(sub, color = Muted, fontSize = 11.sp)
+                                                }
+                                                AppIcon(AIcon.Right, Muted, size = 16.dp)
+                                            }
+                                        }
+                                    }
+                                }
+                            } else {
+                                if (wm.isEmpty() && ws.isEmpty()) {
+                                    item(key = "mlh") { RowTitle("Meine Liste", null, null, onAll = null) }
+                                    item(key = "mle") {
+                                        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                                            EmptyState(AIcon.Plus, "Noch nichts in deiner Liste", "Auf der Seite eines Films oder einer Serie „Meine Liste“ wählen.",
+                                                action = "Filme entdecken", actionModifier = Modifier.focusRequester(ContentFocus.req)) { onTab(1) }
+                                        }
+                                    }
+                                }
+                                if (wm.isNotEmpty()) {
+                                    item(key = "mlmh") { RowTitle("Meine Liste · Filme", null, null, onAll = null) }
+                                    cardGridItems("mlm", wm, CARD_POSTER, ContentFocus.req, onOpen)
+                                }
+                                if (ws.isNotEmpty()) {
+                                    item(key = "mlsh") { RowTitle("Meine Liste · Serien", null, null, onAll = null) }
+                                    cardGridItems("mls", ws, CARD_POSTER, if (wm.isEmpty()) ContentFocus.req else null, onOpen)
+                                }
                             }
                         }
                         MenuLogic.VERLAUF -> {
@@ -817,11 +1145,20 @@ fun HomeScreen(
             BackHandler { picker = false }
             ProfilePicker { id -> picker = false; if (id != Profiles.active) Profiles.switchTo(ctx, id) }
         }
-        Sidebar(
-            tab,
-            { id -> scope.launch { states.getOrNull(id)?.scrollToItem(0) }; onTab(id) },
-            Modifier.align(SidebarPrefs.align()), sideFocus
-        ) { inSidebar = it }
+        if (isPhonePortrait) {
+            TwoTabsBar(
+                currentTab = tab,
+                onSelectTab = { id -> scope.launch { states.getOrNull(id)?.scrollToItem(0) }; onTab(id) },
+                modifier = Modifier.align(Alignment.BottomCenter),
+                showUpper = tab in listOf(0, 1, 2, 3, 7)
+            )
+        } else {
+            Sidebar(
+                tab,
+                { id -> scope.launch { states.getOrNull(id)?.scrollToItem(0) }; onTab(id) },
+                Modifier.align(SidebarPrefs.align()), sideFocus
+            ) { inSidebar = it }
+        }
     }
 }
 
@@ -1017,12 +1354,54 @@ private fun Hero(
 @Composable
 private fun SkeletonHome() {
     val t = rememberInfiniteTransition(label = "sk")
-    val a by t.animateFloat(0.05f, 0.14f, infiniteRepeatable(tween(900), RepeatMode.Reverse), label = "ska")
+    val a by t.animateFloat(0.06f, 0.16f, infiniteRepeatable(tween(900), RepeatMode.Reverse), label = "ska")
     val col = Color.White.copy(alpha = a)
-    Column(Modifier.fillMaxSize().padding(horizontal = DS.PageX).padding(top = 24.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
-        Box(Modifier.fillMaxWidth().height(260.dp).clip(RoundedCornerShape(DS.RadiusXl)).background(col))
-        Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-            repeat(5) { Box(Modifier.width(150.dp).height(225.dp).clip(RoundedCornerShape(DS.RadiusM)).background(col)) }
+    val isPhone = DeviceMode.isPhonePortrait()
+
+    if (isPhone) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // Header skeleton
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(Modifier.width(120.dp).height(28.dp).clip(RoundedCornerShape(8.dp)).background(col))
+                Box(Modifier.size(36.dp).clip(CircleShape).background(col))
+            }
+            // Hero banner skeleton (16:9)
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(16f / 9f)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(col)
+            )
+            // Stadium category pills skeleton
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                repeat(4) {
+                    Box(Modifier.width(80.dp).height(32.dp).clip(RoundedCornerShape(50)).background(col))
+                }
+            }
+            // Movie poster row skeleton (135dp x 202dp)
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                repeat(3) {
+                    Box(Modifier.width(135.dp).height(202.dp).clip(RoundedCornerShape(12.dp)).background(col))
+                }
+            }
+        }
+    } else {
+        Column(Modifier.fillMaxSize().padding(horizontal = DS.PageX).padding(top = 24.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
+            Box(Modifier.fillMaxWidth().height(260.dp).clip(RoundedCornerShape(DS.RadiusXl)).background(col))
+            Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+                repeat(5) { Box(Modifier.width(150.dp).height(225.dp).clip(RoundedCornerShape(DS.RadiusM)).background(col)) }
+            }
         }
     }
 }
