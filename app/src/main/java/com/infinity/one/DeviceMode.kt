@@ -18,10 +18,14 @@ enum class FormFactor { TV, TABLET, PHONE }
 object DeviceMode {
     /** True if the device is a TV / Leanback / Fire TV */
     fun isTv(context: Context): Boolean {
+        val uiModeManager = context.getSystemService(Context.UI_MODE_SERVICE) as? android.app.UiModeManager
+        if (uiModeManager?.currentModeType == Configuration.UI_MODE_TYPE_TELEVISION) return true
         val pm = context.packageManager
         return pm.hasSystemFeature(PackageManager.FEATURE_LEANBACK) ||
             pm.hasSystemFeature("android.software.leanback_only") ||
-            pm.hasSystemFeature("amazon.hardware.fire_tv")
+            pm.hasSystemFeature("android.hardware.type.television") ||
+            pm.hasSystemFeature("amazon.hardware.fire_tv") ||
+            (!pm.hasSystemFeature(PackageManager.FEATURE_TOUCHSCREEN) && !pm.hasSystemFeature(PackageManager.FEATURE_TELEPHONY))
     }
 
     /** Form factor: TV, Tablet (sw >= 600dp), or Phone */
@@ -47,7 +51,13 @@ object DeviceMode {
     fun isPortrait(): Boolean = isPortrait(LocalConfiguration.current)
 
     @Composable
+    fun isTv(): Boolean = isTv(LocalContext.current)
+
+    @Composable
     fun isTablet(): Boolean = currentFormFactor() == FormFactor.TABLET
+
+    @Composable
+    fun isPhone(): Boolean = currentFormFactor() == FormFactor.PHONE
 
     @Composable
     fun isPhonePortrait(): Boolean = isPhonePortrait(LocalContext.current, LocalConfiguration.current)
