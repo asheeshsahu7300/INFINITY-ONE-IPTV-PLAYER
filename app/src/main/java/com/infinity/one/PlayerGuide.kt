@@ -627,13 +627,13 @@ private fun GuideDetailPanel(e: EpgEntry?, ch: Item?, nowSec: Long, modifier: Mo
     ) {
         Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(5.dp)) {
             if (e == null || ch == null) {
-                Text("TV-Guide", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
+                Text(Lang.tr("TV-Guide"), color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
                 Text(
-                    "Wähle eine Sendung mit den Pfeiltasten, OK schaltet auf den Sender.",
+                    Lang.tr("Wähle eine Sendung mit den Pfeiltasten, OK schaltet auf den Sender."),
                     color = PT.T2,
                     fontSize = 14.sp
                 )
-                Text("Zurück: zum Sender, dann zur Kategorie, dann schließen.", color = Muted, fontSize = 13.sp)
+                Text(Lang.tr("Zurück: zum Sender, dann zur Kategorie, dann schließen."), color = Muted, fontSize = 13.sp)
                 return@Column
             }
             val isNow = nowSec >= e.start && nowSec < e.end
