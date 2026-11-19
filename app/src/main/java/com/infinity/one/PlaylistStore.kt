@@ -18,6 +18,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.Call
 import okhttp3.Request
 import org.json.JSONArray
@@ -85,6 +86,13 @@ object PlaylistStore {
     @Volatile private var pendingVer = -1
     private var refilterJob: Job? = null
     private val refilterScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    /**
+     * T-030: loads started from a screen element that can disappear while loading (playlist picker in [switchTo]).
+     * Main thread like the callers; the load itself switches to IO.
+     */
+    private val switchScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    /** T-030: how long a playlist switch waits for a cancelled load to stop (an open request may take a moment). */
+    private const val SWITCH_WAIT_MS = 15_000L
 
     /**
      * Only the "ignore" filter changed (categories or bundles switched in settings): filter the whole list in the background
@@ -512,13 +520,15 @@ object PlaylistStore {
     private fun rawFile(c: Context, url: String) = File(c.filesDir, "pl_" + key(url) + ".m3u")
     /** Stalker portal: categories of which only the newest titles were fetched while loading (see [StalkerMore]). */
     fun stalkerMoreFile(c: Context, url: String) = File(c.filesDir, "stalker_more_" + key(url) + ".tsv")
+    /** T-026: titles of a Stalker portal loaded on demand ([StalkerMore]), kept across restarts and reloads. */
+    fun stalkerItemsFile(c: Context, url: String) = File(c.filesDir, "stalker_more_" + key(url) + ".m3u")
     private fun partFile(c: Context, url: String) = File(c.filesDir, "pl_" + key(url) + ".part")
     private fun infoFile(c: Context, url: String) = File(c.filesDir, "pl_" + key(url) + ".info")
     private fun tmp(f: File) = File(f.path + ".tmp")
 
     private fun deleteFiles(c: Context, url: String) {
         if (url.startsWith("file://")) runCatching { File(java.net.URI(url)).takeIf { it.path.contains("/imports/") }?.delete() }
-        val main = listOf(cacheFile(c, url), gzFile(c, url), rawFile(c, url), partFile(c, url), infoFile(c, url), Catchup.file(c, url), stalkerMoreFile(c, url))
+        val main = listOf(cacheFile(c, url), gzFile(c, url), rawFile(c, url), partFile(c, url), infoFile(c, url), Catchup.file(c, url), stalkerMoreFile(c, url), stalkerItemsFile(c, url))
         (main + main.map { tmp(it) }).forEach { runCatching { it.delete() } }
     }
 
@@ -705,7 +715,9 @@ object PlaylistStore {
         var more: List<StalkerLogic.CatRef> = emptyList()
         try {
             OutputStreamWriter(BufferedOutputStream(counter, 1 shl 16), Charsets.UTF_8).use { w ->
-                StalkerApi.write(src, w, { phase = it }, { if (cancelled()) throw CancellationException("abgebrochen") }) { more = it }
+                // T-026: a refresh while a list is shown keeps the running session (playback keeps its token)
+                StalkerApi.write(src, w, { phase = it }, { if (cancelled()) throw CancellationException("abgebrochen") },
+                    onCats = { more = it }, freshLogin = rawChannels.isEmpty())
             }
         } catch (e: Throwable) {
             part.delete()
@@ -713,8 +725,13 @@ object PlaylistStore {
         }
         info.writeText(LoadLogic.PartInfo(key(u), null, null, "UTF-8").encode())
         if (!part.renameTo(raw)) throw IOException("Datei konnte nicht umbenannt werden")
-        // Only after a successful load: which categories are loaded further on opening
-        runCatching { stalkerMoreFile(c, u).writeText(StalkerLogic.encodeCats(more)) }
+        // Only after a successful load: which categories are loaded further on opening.
+        // T-026: while the titles loaded on demand are kept (stalkerItemsFile), loading goes on after their old position.
+        runCatching {
+            val f = stalkerMoreFile(c, u)
+            val old = if (stalkerItemsFile(c, u).length() > 0 && f.exists()) StalkerLogic.decodeCats(f.readText()) else emptyList()
+            f.writeText(StalkerLogic.encodeCats(StalkerLogic.keepPositions(more, old)))
+        }
         StalkerMore.reset()
         return raw to Charsets.UTF_8
     }
@@ -897,8 +914,31 @@ object PlaylistStore {
         langCounts = counts
         langBytes = bytes
         shownHidden = hidden
-        primaryItems = items; primaryUrl = u; primaryEpg = epg; primaryOrder = order
+        primaryItems = withStalkerItems(c, u, items, hidden); primaryUrl = u; primaryEpg = epg; primaryOrder = order
         rebuild(c)
+    }
+
+    /**
+     * T-026: Stalker portal: add the titles loaded on demand earlier ([stalkerItemsFile]) in front of [items] (they are
+     * older than the first pages). IDs already in [items] and hidden languages are skipped. Other playlists: unchanged.
+     */
+    private fun withStalkerItems(c: Context, u: String, items: List<Item>, hidden: Set<String>): List<Item> {
+        if (!StalkerLogic.isSource(u)) return items
+        val f = stalkerItemsFile(c, u)
+        if (!f.exists() || f.length() == 0L) return items
+        return try {
+            val chunks = StalkerLogic.chunksNewestFirst(f.readText())
+            if (chunks.isEmpty()) return items
+            val have = HashSet<String>(items.size * 2).also { s -> items.forEach { s.add(it.id) } }
+            // Each portion on its own, as when it was loaded (the parser merges series of the same name into one).
+            // Same language filter as the cached list (the parser applies it, see M3uParser.parseLines).
+            val more = chunks.flatMap { M3uParser.parseLines(("#EXTM3U\n" + it).lineSequence(), hidden).items }.filter { have.add(it.id) }
+            if (more.isEmpty()) items else more + items
+        } catch (e: Exception) {
+            items
+        } catch (e: OutOfMemoryError) {
+            items
+        }
     }
 
     /** Further shown playlists (without the active one), in list order. */
@@ -924,12 +964,23 @@ object PlaylistStore {
     suspend fun switchTo(c: Context, i: Int) {
         ensure(c)
         if (i !in lists.indices) return
-        if (loadLock.isLocked) return   // a load is already running: do not interfere
+        if (loadLock.isLocked) {
+            // T-030: a running load (e.g. a Stalker portal fetching every category for minutes) ignored every further
+            // switch. The user chose another playlist: stop that load and wait until it has let go.
+            cancel()
+            withTimeoutOrNull(SWITCH_WAIT_MS) { while (loadLock.isLocked) delay(50) }
+            if (loadLock.isLocked) return
+        }
         activate(c, i)
         primaryItems = emptyList(); primaryUrl = null
         merged = MultiLogic.Merged(emptyList(), emptySet(), emptyMap()); sourceNames = emptyList()
         setItems(emptyList())
-        load(c, lists[i].url, false)
+        // T-030: the picker that calls this leaves the screen as soon as the list is empty, and its coroutine scope is
+        // cancelled with it. The load runs in our own scope, so it is not cancelled halfway (which left an empty list
+        // with "No channels yet"). Cancelling by the user still works: [cancel] stops the load's own job.
+        val url = lists[i].url
+        val app = c.applicationContext
+        switchScope.launch { load(app, url, false) }.join()
     }
 
     /** Show a playlist additionally (or no longer). Call [applyMulti] afterwards. */
@@ -1222,6 +1273,8 @@ object PlaylistStore {
                 // Renew further shown playlists from the server as well
                 loadExtras(c, network = true)
                 if (save) finishSave(c, u)
+                // T-026: the list is fresh from the server (also right after adding it): the next start must not load it again
+                General.markRefreshed(c)
                 askNext = false
                 true
             } catch (e: CancellationException) {

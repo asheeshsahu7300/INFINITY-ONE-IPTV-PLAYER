@@ -39,6 +39,7 @@ The repository root has no `SECURITY.md` yet, so there is no documented reportin
 | 14 | Licence terms of TMDB and IMDb data | open | Unverified; to be documented only | PENDING | audit section 8 |
 | 15 | No documented vulnerability reporting channel | open | No `SECURITY.md` in the repository root (audit section 6) | maintainer decision | repository root |
 | 16 | Xtream backup servers receive the playlist's username and password | open (by design) | Credentials go only to addresses the user entered for that playlist (`HostFailoverLogic.pickGroup`). A backup entered without a scheme becomes `http://`, so with an `https` main server the credentials go over plain HTTP | T-009 follow-up (UI hint, decision pending) | `HostFailover.kt`, `PlaylistStore.kt` |
+| 17 | Stalker requests are written to logcat with the full address and the first 200 characters of the answer | open (existing, found in T-026) | The portal host, request parameters and, for the handshake, the session token can appear in logcat (tag `StalkerHttp`). Not changed in T-026 | separate task | `StalkerApi.kt` (`call`) |
 
 ## 4. Follow-ups found in T-002 (not in the audit)
 

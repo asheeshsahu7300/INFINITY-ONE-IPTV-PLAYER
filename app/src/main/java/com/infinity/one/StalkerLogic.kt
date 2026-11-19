@@ -120,7 +120,12 @@ object StalkerLogic {
     fun cookie(mac: String, tz: String = "Europe/Berlin"): String = "mac=$mac; stb_lang=en; timezone=$tz"
 
     const val UA = "Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) MAG200 stbapp ver: 2 rev: 250 Safari/533.3"
-    const val X_UA = "Model: MAG250; Link: WiFi"
+    /**
+     * Box model the app reports, in the X-User-Agent header and as "stb_type" in get_profile (both must match).
+     * MAG270 since T-026 (maintainer decision, 19 Nov 2026): the working client of a stalker_portal portal sends MAG270.
+     */
+    const val MODEL = "MAG270"
+    const val X_UA = "Model: $MODEL; Link: WiFi"
     private const val VER = "ImageDescription: 0.2.18-r23-250; ImageDate: Thu Sep 13 11:31:16 EEST 2018; PORTAL version: 5.6.1; " +
         "API Version: JS API version: 343; STB API version: 146; Player Engine version: 0x58c"
 
@@ -134,8 +139,8 @@ object StalkerLogic {
         val sn = src.sn.ifEmpty { hash("MD5", src.mac).take(13) }
         val dev = src.id1.ifEmpty { hash("SHA-256", src.mac) }
         val dev2 = src.id2.ifEmpty { dev }
-        // As a MAG250 sends it (TiviMate / STB Emu do the same); some portals only accept the token for playback after this
-        return "&hd=1&ver=${enc(VER)}&num_banks=2&sn=${enc(sn)}&stb_type=MAG250&client_type=STB&image_version=218&video_out=hdmi" +
+        // As a MAG box sends it (TiviMate / STB Emu do the same); some portals only accept the token for playback after this
+        return "&hd=1&ver=${enc(VER)}&num_banks=2&sn=${enc(sn)}&stb_type=$MODEL&client_type=STB&image_version=218&video_out=hdmi" +
             "&device_id=${enc(dev)}&device_id2=${enc(dev2)}&auth_second_step=1&hw_version=1.7-BD-00&not_valid_token=0" +
             "&api_signature=262"
     }
@@ -217,6 +222,44 @@ object StalkerLogic {
         for (k in listOf("season_number", "season_num", "season")) f[k]?.trim()?.toIntOrNull()?.takeIf { it in 0..999 }?.let { return it }
         val m = SEASON_NAME.find(f["name"] ?: f["title"] ?: "")
         return m?.groupValues?.get(2)?.toIntOrNull()?.takeIf { it in 0..999 } ?: fallback
+    }
+
+    /**
+     * T-029: a row of a series list that is itself an episode ("is_episode": true). Some stalker_portal portals answer
+     * the season level (season_id=0) with the episodes directly, each with its own "id" and "season_id" but no "cmd".
+     */
+    fun isEpisodeRow(f: Map<String, String>): Boolean {
+        val v = f["is_episode"]?.trim()?.lowercase()
+        return v == "true" || v == "1"
+    }
+
+    /**
+     * T-029: season numbers for episode rows that only carry a season ID: the distinct IDs in ascending order become
+     * season 1, 2, … (numeric IDs compared as numbers). Blank IDs are left out.
+     */
+    fun seasonsById(ids: List<String>): Map<String, Int> {
+        val distinct = ids.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+        val sorted = distinct.sortedWith(compareBy<String>({ it.toLongOrNull() ?: Long.MAX_VALUE }, { it }))
+        return sorted.withIndex().associate { (i, id) -> id to i + 1 }
+    }
+
+    /**
+     * T-029: season of an episode row: only from the portal's season fields, otherwise [fallback] (from [seasonsById]).
+     * Not from the name: [seasonNumber] also reads a bare "s" plus number, which an episode title can contain.
+     */
+    fun episodeRowSeason(f: Map<String, String>, fallback: Int): Int {
+        for (k in listOf("season_number", "season_num", "season")) f[k]?.trim()?.toIntOrNull()?.takeIf { it in 0..999 }?.let { return it }
+        return fallback
+    }
+
+    /**
+     * T-029: the portal's own episode title for display, or null (then "Episode N" is shown). Blank values, "null" and
+     * a bare number are dropped; line breaks become spaces; very long titles are cut.
+     */
+    fun episodeTitle(raw: String?, num: Int): String? {
+        val t = raw?.replace('\n', ' ')?.replace('\r', ' ')?.trim().orEmpty()
+        if (t.isEmpty() || t.equals("null", true) || t == num.toString()) return null
+        return if (t.length > 150) t.take(150).trimEnd() + "…" else t
     }
 
     /** Episode number: from fields of the portal, otherwise from the name ("Episode 5", "E05", "5. Folge"), otherwise [fallback]. */
@@ -326,6 +369,49 @@ object StalkerLogic {
         if (movies) return named.filter { it.type == "vod" }
         if (!series) return emptyList()
         return named.filter { it.type == "series" }.ifEmpty { named.filter { it.type == "vod" } }
+    }
+
+    /**
+     * T-026: page positions after a full reload. [fresh] = categories with more pages after the reload (first page only),
+     * [old] = stored positions from before, whose titles are kept in the file of titles loaded on demand. A category
+     * goes on after its old position: the portal lists the newest first, so new titles only push older ones further
+     * down and nothing is skipped (pages seen again bring duplicates, which are dropped by ID).
+     * Categories that were complete before are not in [old] and start again after the first page.
+     */
+    fun keepPositions(fresh: List<CatRef>, old: List<CatRef>): List<CatRef> {
+        if (old.isEmpty()) return fresh
+        val before = old.associateBy { it.type + "\t" + it.id }
+        return fresh.map { n -> before[n.type + "\t" + n.id]?.takeIf { it.pages > n.pages }?.let { n.copy(pages = it.pages) } ?: n }
+    }
+
+    /** T-026: line that starts each portion in the file of titles loaded on demand (an M3U comment, see [chunkBlock]). */
+    const val CHUNK_MARK = "#INFINITY-CHUNK"
+
+    /** One portion of M3U lines ([m3u], oldest first) as it is appended to the file of titles loaded on demand. */
+    fun chunkBlock(m3u: String): String {
+        val body = m3u.trim('\n')
+        return if (body.isBlank()) "" else "$CHUNK_MARK\n$body\n"
+    }
+
+    /**
+     * The file of titles loaded on demand as one M3U body in list order. Portions are appended as they arrive, but every
+     * portion is older than the one before it, so the last portion goes first (as [PlaylistStore.appendItems] does).
+     * Lines before the first mark count as one portion. A last portion without a final line break (app stopped while
+     * appending) is dropped as a whole, so neither a cut-off address nor a title without address is shown.
+     */
+    fun newestChunkFirst(text: String): String = chunksNewestFirst(text).joinToString("")
+
+    /** Like [newestChunkFirst], but one M3U body per portion (each is parsed on its own, as when it was loaded). */
+    fun chunksNewestFirst(text: String): List<String> {
+        val chunks = ArrayList<StringBuilder>()
+        var cur = StringBuilder().also { chunks.add(it) }
+        val whole = if (text.isEmpty() || text.endsWith('\n')) text else text.substring(0, text.lastIndexOf(CHUNK_MARK).coerceAtLeast(0))
+        for (line in whole.lineSequence()) {
+            if (line.trim() == CHUNK_MARK) { cur = StringBuilder().also { chunks.add(it) }; continue }
+            if (line.isBlank()) continue
+            cur.append(line).append('\n')
+        }
+        return chunks.asReversed().filter { it.isNotEmpty() }.map { it.toString() }
     }
 
     /** Page count from total and page size; [fallback] if the portal sends no numbers. */

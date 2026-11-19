@@ -41,6 +41,10 @@ class CustomRenderersFactory(ctx: Context) : DefaultRenderersFactory(ctx) {
     init {
         setExtensionRendererMode(if (SoftAudio.available(ctx)) EXTENSION_RENDERER_MODE_ON else EXTENSION_RENDERER_MODE_OFF)
         setEnableDecoderFallback(true)
+        // T-028: hand buffers to MediaCodec synchronously. Media3 queues asynchronously by default on API 31+, which on
+        // some TV chips (Amlogic, MediaTek, Realtek) fails with 4K HEVC 10-bit (decoder error or black screen).
+        // The maintainer's previous app does the same and plays these titles on the same TV.
+        forceDisableMediaCodecAsynchronousQueueing()
     }
 
     override fun buildVideoRenderers(

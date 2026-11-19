@@ -7,7 +7,7 @@ Feature status at version 1.3 (commit `b65e838`, tag `V1.3`). Source: refactorin
 | Xtream playlists | present | fallback to `player_api.php` when `get.php` fails (`XtreamApi.kt:16`) |
 | Xtream backup servers with failover | present (T-009, device test pending) | `HostFailover.kt`; see `docs/tasks/T-009-xtream-backup-servers.md` |
 | M3U playlists (URL and file) | present | `Models.kt:298`, `CatchupLogic.kt:68` |
-| Stalker/Ministra portals | present | including series: placeholders, episodes load on open (`StalkerApi.kt:16-17, 28`) |
+| Stalker/Ministra portals | present | including series: placeholders, episodes load on open (`StalkerApi.kt:16-17, 28`). Movie/series categories load the first page, more on scrolling (`StalkerMore.kt`); those titles are saved in `stalker_more_<key>.m3u` and kept across restarts (T-026, device test pending) |
 | Several playlists at once | present | `MultiLogic.kt:3-5`, `AreaSource.kt:7` |
 | Live TV and TV guide (XMLTV) | present | `Epg.kt:50, 75` |
 | TMDB / OMDb metadata | present | only with the user's own keys (`Meta.kt:318, 446`, `Config.kt:7-17`) |

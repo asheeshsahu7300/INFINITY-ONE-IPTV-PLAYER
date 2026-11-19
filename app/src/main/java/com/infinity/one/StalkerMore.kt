@@ -18,8 +18,10 @@ import kotlin.coroutines.coroutineContext
  * movie/series category. When the user opens a category the next portion comes ([StalkerApi.loadChunk]); further
  * portions only when they scroll near the end of the list ([wantMore]). Only one request runs at a time.
  *
- * The state is kept in memory for the running session only: titles loaded on demand are not in the playlist cache,
- * so after a restart loading starts again after the first page.
+ * T-026: every portion is also appended to [PlaylistStore.stalkerItemsFile] and the page position of each category is
+ * stored in [PlaylistStore.stalkerMoreFile], so the titles stay after a restart and loading goes on where it stopped.
+ * A full reload of the playlist keeps the titles and starts the page positions again after the first page (duplicates
+ * are skipped by ID).
  */
 object StalkerMore {
     /** This close to the end of the list (in titles) the next portion is fetched. */
@@ -82,6 +84,29 @@ object StalkerMore {
     }
 
     private fun refKey(r: StalkerLogic.CatRef) = r.type + "\t" + r.id
+
+    /** Upper limit of the file of titles loaded on demand; beyond it new portions stay in memory only. */
+    private const val MAX_SAVED_BYTES = 32L * 1024 * 1024
+
+    /**
+     * T-026: append a portion ([m3u]) to the file of titles loaded on demand and store the page position of all
+     * categories ([refs]). Called under [lock]. Failures only cost the persistence, never the loaded titles.
+     * The position is stored only together with its titles: if the file is full, the old position stays, so after a
+     * restart those pages are fetched again instead of leaving a gap.
+     */
+    private fun save(c: Context, u: String, m3u: String, refs: Collection<StalkerLogic.CatRef>) {
+        try {
+            val f = PlaylistStore.stalkerItemsFile(c, u)
+            val block = StalkerLogic.chunkBlock(m3u)
+            if (block.isNotEmpty()) {
+                if (f.length() >= MAX_SAVED_BYTES) return
+                f.appendText(block, Charsets.UTF_8)
+            }
+            PlaylistStore.stalkerMoreFile(c, u).writeText(StalkerLogic.encodeCats(refs.toList()))
+        } catch (e: Exception) {
+            Log.w("StalkerMore", "save failed: ${e.javaClass.simpleName}")
+        }
+    }
 
     private fun refsOf(c: Context, u: String): MutableMap<String, StalkerLogic.CatRef> = synchronized(lock) {
         refs.getOrPut(u) {
@@ -149,6 +174,9 @@ object StalkerMore {
                 else -> m[refKey(ch.ref)] = ch.ref
             }
             if (!ch.ok) failedAt[refKey(ch.ref)] = System.currentTimeMillis()
+            // T-026: keep the portion and the new page position across restarts (read back in PlaylistStore.show)
+            // Only portions with new titles are appended (after a full reload known pages come again)
+            save(c, u, if (fresh.isNotEmpty()) ch.m3u else "", m.values)
         }
         val sameGroup = fresh.filter { it.group == group }
         Snapshot.withMutableSnapshot {

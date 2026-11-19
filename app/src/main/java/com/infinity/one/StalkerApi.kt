@@ -75,7 +75,36 @@ object StalkerApi {
         return runCatching { JSONObject(trimmed.substring(firstBrace)) }.getOrNull()
     }
 
-    private val callLock = Any()
+    /**
+     * T-026: number of user-facing requests running now (play address, episode list). While it is above 0, list loading
+     * ([pageRange], [paged]) waits before its next page, so playback and Live TV do not hang behind a reload.
+     */
+    private val urgentCount = java.util.concurrent.atomic.AtomicInteger(0)
+    private const val URGENT_POLL_MS = 150L
+    /** Longest time list loading waits for user requests at once, so a stuck request cannot stop it for good. */
+    private const val URGENT_MAX_WAIT_MS = 20_000L
+
+    private inline fun <T> urgent(block: () -> T): T {
+        urgentCount.incrementAndGet()
+        try { return block() } finally { urgentCount.decrementAndGet() }
+    }
+
+    /** List loading: wait while a user request runs ([urgent]); [check] throws on abort. */
+    private fun yieldToUrgent(check: () -> Unit) {
+        var waited = 0L
+        while (urgentCount.get() > 0 && waited < URGENT_MAX_WAIT_MS) {
+            check()
+            Thread.sleep(URGENT_POLL_MS)
+            waited += URGENT_POLL_MS
+        }
+    }
+
+    /**
+     * One request at a time per app, as before T-026: some portals reject a second request on the same session while one
+     * is still running ("Authorization failed", seen on a stalker_portal portal during a 12 MB channel list download).
+     * Fair, so a waiting play or episode request gets the next turn; list loading also pauses for it ([yieldToUrgent]).
+     */
+    private val callLock = java.util.concurrent.locks.ReentrantLock(true)
     @Volatile private var lastCallTime = 0L
     private const val MIN_CALL_INTERVAL_MS = 250L
 
@@ -85,20 +114,22 @@ object StalkerApi {
      */
     private fun call(src: StalkerLogic.Source, url: String, token: String?): Pair<Int, String>? {
         for (round in 0 until 3) {
-            val res = synchronized(callLock) {
-                val now = System.currentTimeMillis()
-                val waitMs = (lastCallTime + MIN_CALL_INTERVAL_MS) - now
+            // The request runs under the lock (one at a time, see [callLock]); a play request waits only for the request
+            // that is running, because list loading pauses before its next page ([yieldToUrgent]).
+            callLock.lock()
+            val res = try {
+                val waitMs = lastCallTime + MIN_CALL_INTERVAL_MS - System.currentTimeMillis()
                 if (waitMs > 0) Thread.sleep(waitMs)
                 lastCallTime = System.currentTimeMillis()
-                try {
-                    client.newCall(req(src, url, token)).execute().use { r ->
-                        val wait = if (r.code == 429) (r.header("Retry-After")?.trim()?.toLongOrNull() ?: 2L).coerceIn(1L, 6L) else 0L
-                        Triple(r.code, r.body?.string().orEmpty(), wait)
-                    }
-                } catch (e: Exception) {
-                    android.util.Log.w("StalkerHttp", "call exception: ${e.message}, url=$url")
-                    null
+                client.newCall(req(src, url, token)).execute().use { r ->
+                    val wait = if (r.code == 429) (r.header("Retry-After")?.trim()?.toLongOrNull() ?: 2L).coerceIn(1L, 6L) else 0L
+                    Triple(r.code, r.body?.string().orEmpty(), wait)
                 }
+            } catch (e: Exception) {
+                android.util.Log.w("StalkerHttp", "call exception: ${e.message}, url=$url")
+                null
+            } finally {
+                callLock.unlock()
             } ?: return null
 
             if (res.first == 429 && round < 2) {
@@ -200,7 +231,9 @@ object StalkerApi {
      * Fetch all pages of a list ([extra] = parameters), [each] per entry. Stops at [maxItems], an empty page or
      * a repeating page. true = at least one page arrived.
      */
-    private fun paged(s: Session, type: String, extra: String, maxItems: Int, check: () -> Unit, each: (JSONObject) -> Unit): Boolean {
+    private fun paged(
+        s: Session, type: String, extra: String, maxItems: Int, check: () -> Unit, bulk: Boolean = false, each: (JSONObject) -> Unit
+    ): Boolean {
         var page = 1
         var pages = 1
         var got = 0
@@ -208,6 +241,9 @@ object StalkerApi {
         var lastFirst: String? = null
         while (page <= pages && got < maxItems) {
             check()
+            // T-026: only list loading ([bulk]) pauses for user requests. The episode list is itself a user request:
+            // pausing there made it wait for itself until the 20 s limit, before every page.
+            if (bulk) yieldToUrgent(check)
             val o = js(s.src, StalkerLogic.api(s.endpoint, type, "get_ordered_list", "$extra&p=$page"), s.token) as? JSONObject ?: break
             ok = true
             val a = o.optJSONArray("data") ?: break
@@ -230,19 +266,25 @@ object StalkerApi {
      * category, fast like IPTVnator. Categories with more titles go to [onCats]; their further pages come when the
      * category is opened or scrolled ([loadChunk], [StalkerMore]). [onPhase] = progress, [check] throws on abort.
      * Return value: number of entries.
+     * [freshLogin] false (T-026, background refresh while a list is shown): reuse a running session, so a playback that
+     * uses its token is not cut off; a new login happens only if the portal no longer accepts it.
      */
     fun write(
         src: StalkerLogic.Source, out: Writer, onPhase: (String) -> Unit, check: () -> Unit,
-        onCats: (List<StalkerLogic.CatRef>) -> Unit = {}
+        onCats: (List<StalkerLogic.CatRef>) -> Unit = {}, freshLogin: Boolean = true
     ): Int {
         onPhase("Zugang wird geprüft …")
-        val s = login(src, force = true)
+        var s = login(src, force = freshLogin)
         var n = 0
         out.write("#EXTM3U\n")
 
         // ---- Channels
         onPhase("Sender werden geladen …")
-        val genres = categories(s, "itv", "get_genres")
+        var genres = categories(s, "itv", "get_genres")
+        if (!freshLogin && note == "Authorization failed") {
+            s = login(src, force = true)
+            genres = categories(s, "itv", "get_genres")
+        }
         var live = 0
         val all = js(src, StalkerLogic.api(s.endpoint, "itv", "get_all_channels"), s.token)
         val data = (all as? JSONObject)?.optJSONArray("data") ?: (all as? JSONArray)
@@ -253,7 +295,7 @@ object StalkerApi {
         }
         if (live == 0) {
             // Fallback: many portals block "all channels at once" and deliver only page by page
-            paged(s, "itv", "&genre=*&force_ch_link_check=&fav=0&sortby=number&hd=0", MAX_CHANNELS, check) { o ->
+            paged(s, "itv", "&genre=*&force_ch_link_check=&fav=0&sortby=number&hd=0", MAX_CHANNELS, check, bulk = true) { o ->
                 StalkerLogic.liveEntry(src, fields(o), genres)?.let { out.write(it); out.write("\n"); n++; live++ }
                 if (live % 400 == 0) onPhase("Sender werden geladen ($live) …")
             }
@@ -325,20 +367,24 @@ object StalkerApi {
         var total = -1
         var lastFp: String? = null
         val isStalker = isStalkerPortal(src)
+        // T-026: once the list only answers without "sortby", the following pages of this run are asked the same way.
+        // Otherwise the next page came back empty and the category counted as complete (now stored, see StalkerMore).
+        var ex = extra
         while (page <= pages && page < from + max) {
             check()
+            yieldToUrgent(check)
             var o: JSONObject? = null
             for (attempt in 0 until 2) {
                 val s = runCatching { login(src, force = attempt > 0) }.getOrNull() ?: break
                 if (isStalker) {
-                    val res = js(src, StalkerLogic.api(s.endpoint, type, "get_ordered_list", "$extra&p=$page"), s.token)
+                    val res = js(src, StalkerLogic.api(s.endpoint, type, "get_ordered_list", "$ex&p=$page"), s.token)
                     o = when (res) {
                         is JSONObject -> res
                         is JSONArray -> JSONObject().put("data", res)
                         else -> null
                     }
-                    if (page == from && (o?.optJSONArray("data")?.length() ?: 0) == 0 && extra.contains("&sortby=")) {
-                        val fallbackExtra = extra.replace(Regex("""&sortby=[^&]*"""), "")
+                    if (page == from && (o?.optJSONArray("data")?.length() ?: 0) == 0 && ex.contains("&sortby=")) {
+                        val fallbackExtra = ex.replace(Regex("""&sortby=[^&]*"""), "")
                         val altRes = js(src, StalkerLogic.api(s.endpoint, type, "get_ordered_list", "$fallbackExtra&p=$page"), s.token)
                         val altObj = when (altRes) {
                             is JSONObject -> altRes
@@ -347,6 +393,7 @@ object StalkerApi {
                         }
                         if (altObj != null && (altObj.optJSONArray("data")?.length() ?: 0) > 0) {
                             o = altObj
+                            ex = fallbackExtra
                         }
                     }
                 } else {
@@ -519,7 +566,9 @@ object StalkerApi {
     }
 
     /** Real play address for "stalker://…" (freshly generated by the portal). null = not possible. */
-    suspend fun resolve(c: Context, url: String): String? = withContext(Dispatchers.IO) {
+    suspend fun resolve(c: Context, url: String): String? = withContext(Dispatchers.IO) { urgent { resolveNow(c, url) } }
+
+    private suspend fun resolveNow(c: Context, url: String): String? = withContext(Dispatchers.IO) {
         val trace = ArrayList<String>()
         fun fail(why: String): String? {
             trace.add(why)
@@ -673,7 +722,9 @@ object StalkerApi {
      * empty list = series without episodes. Two portal constructions are recognized: seasons with episode numbers ("series" list)
      * and seasons that deliver their episodes as separate entries.
      */
-    fun episodeList(url: String): List<Episode>? {
+    fun episodeList(url: String): List<Episode>? = urgent { episodeListNow(url) }
+
+    private fun episodeListNow(url: String): List<Episode>? {
         lastSeriesDetail = ""
         val trace = ArrayList<String>()
         fun done(l: List<Episode>?, why: String? = null): List<Episode>? {
@@ -707,7 +758,8 @@ object StalkerApi {
         val seen = HashSet<Long>()
         val out = ArrayList<Episode>()
 
-        fun add(season: Int, num: Int, cmd: String, series: String?, seasonId: String = "", episodeId: String = "") {
+        /** [title] = the portal's own episode title (T-029); blank or null = "Episode N". */
+        fun add(season: Int, num: Int, cmd: String, series: String?, seasonId: String = "", episodeId: String = "", title: String? = null) {
             // Without a command an episode can still be played via its file (needs season and episode ID)
             if (cmd.isBlank() && episodeId.isEmpty()) return
             if (!seen.add((season.toLong() shl 32) or num.toLong())) return
@@ -715,7 +767,41 @@ object StalkerApi {
             val u = if (series == null && episodeId.isNotEmpty())
                 StalkerLogic.itemUrl(src.key, "efile", StalkerLink.Play.episode(cmd, type, ref.id, seasonId, episodeId))
             else StalkerLogic.itemUrl(src.key, "movie", cmd, series)
-            out.add(Episode(season, num, EpTitles.of(num), u))
+            out.add(Episode(season, num, StalkerLogic.episodeTitle(title, num) ?: EpTitles.of(num), u))
+        }
+
+        /**
+         * T-029 (after the maintainer's previous app): episode objects that a season row carries itself, in "series",
+         * "episodes", "data" or "list", as a list or as a dictionary ({"1": {...}, "2": {...}}). Empty = none.
+         */
+        fun nestedEpisodes(o: JSONObject): List<JSONObject> {
+            for (k in listOf("series", "episodes", "data", "list")) {
+                val l = when (val v = o.opt(k)) {
+                    is JSONArray -> (0 until v.length()).mapNotNull { v.optJSONObject(it) }
+                    is JSONObject -> v.keys().asSequence().mapNotNull { v.optJSONObject(it) }.toList()
+                    else -> emptyList()
+                }
+                if (l.isNotEmpty()) return l
+            }
+            return emptyList()
+        }
+
+        /** Dictionary answer {info, seasons, episodes: {"1": [...], …}}; true = episodes found (T-029: also from get_ordered_list). */
+        fun readDict(o: JSONObject): Boolean {
+            val epsMap = o.optJSONObject("episodes") ?: return false
+            val before = out.size
+            for (sNumStr in epsMap.keys()) {
+                val sNum = sNumStr.toIntOrNull() ?: 1
+                val epArr = epsMap.optJSONArray(sNumStr) ?: continue
+                for (j in 0 until epArr.length()) {
+                    val epObj = epArr.optJSONObject(j) ?: continue
+                    val epNum = epObj.optInt("episode_num", j + 1)
+                    val cmd = epObj.optString("cmd").trim().takeIf { it != "null" }.orEmpty()
+                    // As before: without a command, the series ID plus episode number is sent to create_link
+                    add(sNum, epNum, cmd.ifEmpty { ref.id }, epNum.toString(), title = epObj.optString("title"))
+                }
+            }
+            return out.size > before
         }
 
         /** Entries of a season: episode numbers or single episodes. true = something found. */
@@ -740,11 +826,32 @@ object StalkerApi {
                 }
                 if (any) return true
             }
+            // T-029: episode objects inside the season row (own cmd / id / title); asking for the season separately is
+            // then not needed
+            val nested = nestedEpisodes(o)
+            if (nested.isNotEmpty()) {
+                val sid = seasonId.ifEmpty { o.opt("id")?.toString()?.trim().orEmpty() }
+                val before = out.size
+                for ((i, e) in nested.withIndex()) {
+                    val f = fields(e)
+                    val num = StalkerLogic.episodeNumber(f, i + 1)
+                    val title = f["title"] ?: f["name"]
+                    val ecmd = e.optString("cmd").trim().takeIf { it != "null" }.orEmpty()
+                    val eid = e.opt("id")?.toString()?.trim().orEmpty()
+                    when {
+                        ecmd.isNotEmpty() -> add(season, num, ecmd, null, title = title)
+                        cmd.isNotEmpty() -> add(season, num, cmd, num.toString(), title = title)
+                        eid.isNotEmpty() && sid.isNotEmpty() -> add(season, num, "", null, sid, eid, title)
+                    }
+                }
+                if (out.size > before) return true
+            }
             if (isSeason(o)) return false
             val eid = if (seasonId.isNotEmpty()) o.opt("id")?.toString()?.trim().orEmpty() else ""
             if (cmd.isNotEmpty() || eid.isNotEmpty()) {
                 val before = out.size
-                add(season, StalkerLogic.episodeNumber(fields(o), fallbackNum), cmd, null, seasonId, eid)
+                val f = fields(o)
+                add(season, StalkerLogic.episodeNumber(f, fallbackNum), cmd, null, seasonId, eid, f["title"] ?: f["name"])
                 return out.size > before
             }
             return false
@@ -758,6 +865,12 @@ object StalkerApi {
         if (!ok || level1.isEmpty()) {
             val cleanExtra = "&movie_id=${enc(ref.id)}"
             val o = js(src, StalkerLogic.api(s.endpoint, type, "get_ordered_list", cleanExtra), s.token)
+            // T-029: some portals answer here already with the dictionary layout (episodes per season)
+            if (o is JSONObject && readDict(o)) {
+                trace.add("$type: ${out.size} episodes (dictionary)")
+                out.sortWith(compareBy({ it.season }, { it.num }))
+                return out
+            }
             val arr = (o as? JSONObject)?.optJSONArray("data") ?: (o as? JSONArray)
             if (arr != null && arr.length() > 0) {
                 ok = true
@@ -772,28 +885,9 @@ object StalkerApi {
         if (!ok || level1.isEmpty()) {
             val infoExtra = "&series_id=${enc(ref.id)}"
             val o = js(src, StalkerLogic.api(s.endpoint, type, "get_series_info", infoExtra), s.token)
-            if (o is JSONObject) {
-                val epsMap = o.optJSONObject("episodes")
-                if (epsMap != null) {
-                    val keys = epsMap.keys()
-                    while (keys.hasNext()) {
-                        val sNumStr = keys.next()
-                        val sNum = sNumStr.toIntOrNull() ?: 1
-                        val epArr = epsMap.optJSONArray(sNumStr) ?: continue
-                        for (j in 0 until epArr.length()) {
-                            val epObj = epArr.optJSONObject(j) ?: continue
-                            val epNum = epObj.optInt("episode_num", j + 1)
-                            val cmd = epObj.optString("cmd").trim()
-                            val u = if (cmd.isNotEmpty()) StalkerLogic.itemUrl(src.key, "movie", cmd, epNum.toString())
-                            else StalkerLogic.itemUrl(src.key, "movie", ref.id, epNum.toString())
-                            out.add(Episode(sNum, epNum, epObj.optString("title").ifBlank { EpTitles.of(epNum) }, u))
-                        }
-                    }
-                    if (out.isNotEmpty()) {
-                        out.sortWith(compareBy({ it.season }, { it.num }))
-                        return out
-                    }
-                }
+            if (o is JSONObject && readDict(o)) {
+                out.sortWith(compareBy({ it.season }, { it.num }))
+                return out
             }
         }
 
@@ -809,6 +903,21 @@ object StalkerApi {
                 StalkerMetaCache.put(ref.id, null, null, sm)
                 break
             }
+        }
+        // T-029: the season level already lists the episodes themselves (is_episode, own id and season_id, no cmd).
+        // Read them as episodes; otherwise every episode counted as a season and its id was asked for as a season ID.
+        val rows = level1.map { fields(it) }
+        if (rows.isNotEmpty() && rows.all { StalkerLogic.isEpisodeRow(it) }) {
+            val seasons = StalkerLogic.seasonsById(rows.map { it["season_id"].orEmpty() })
+            for ((i, f) in rows.withIndex()) {
+                val sid = f["season_id"]?.trim().orEmpty()
+                val eid = f["id"]?.trim().orEmpty()
+                val cmd = f["cmd"]?.trim()?.takeIf { it != "null" }.orEmpty()
+                add(StalkerLogic.episodeRowSeason(f, seasons[sid] ?: 1), StalkerLogic.episodeNumber(f, i + 1), cmd, null, sid, eid, f["name"])
+            }
+            trace.add("$type: ${out.size} episodes listed directly")
+            out.sortWith(compareBy({ it.season }, { it.num }))
+            return out
         }
         var idx = 0
         for (o in level1) {
