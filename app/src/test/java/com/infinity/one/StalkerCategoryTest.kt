@@ -1,6 +1,7 @@
 package com.infinity.one
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Test
 
@@ -129,5 +130,52 @@ class StalkerCategoryTest {
 
         val seriesUrl = StalkerLogic.searchUrl("http://portal.tld/portal.php", "series", "Ring of Desire", 2)
         assertEquals("http://portal.tld/portal.php?type=series&action=get_ordered_list&search=Ring+of+Desire&p=2&JsHttpRequest=1-xml", seriesUrl)
+    }
+
+    @Test fun findMatchingObjectDoesNotBlindlyReturnFirstObjectOnMismatch() {
+        val arr = org.json.JSONArray().apply {
+            put(org.json.JSONObject().apply {
+                put("id", "844302")
+                put("name", "Big World (2024)")
+                put("description", "A Chinese drama story")
+            })
+            put(org.json.JSONObject().apply {
+                put("id", "844303")
+                put("name", "Something Else")
+                put("description", "Unrelated")
+            })
+        }
+        val match = StalkerApi.findMatchingObject(
+            arr,
+            targetId = "646698",
+            targetCmd = null,
+            rawTitle = "Avatar: Fire and Ash (2024)",
+            cleanQ = "Avatar Fire and Ash"
+        )
+        assertNull(match)
+    }
+
+    @Test fun findMatchingObjectMatchesOnCleanTitleWithYearOrResolution() {
+        val arr = org.json.JSONArray().apply {
+            put(org.json.JSONObject().apply {
+                put("id", "844302")
+                put("name", "Big World (2024)")
+                put("description", "A Chinese drama story")
+            })
+            put(org.json.JSONObject().apply {
+                put("id", "646698")
+                put("name", "Avatar: Fire and Ash (2024)")
+                put("description", "James Cameron Avatar 3")
+            })
+        }
+        val match = StalkerApi.findMatchingObject(
+            arr,
+            targetId = "646698",
+            targetCmd = null,
+            rawTitle = "Avatar: Fire and Ash (2024) [4K]",
+            cleanQ = "Avatar Fire and Ash"
+        )
+        assertNotNull(match)
+        assertEquals("646698", match!!.optString("id"))
     }
 }

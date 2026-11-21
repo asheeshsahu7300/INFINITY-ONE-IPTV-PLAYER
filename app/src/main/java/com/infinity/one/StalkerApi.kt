@@ -517,7 +517,7 @@ object StalkerApi {
                     val sid = f["id"] ?: f["movie_id"] ?: f["series_id"]
                     val cmd = f["cmd"]
                     val cleanNm = cleanSearchQuery(rawTitle)
-                    StalkerMetaCache.put(sid, cmd, MatchLogic.norm(cleanNm), m)
+                    StalkerMetaCache.put(sid, cmd, MatchLogic.norm(cleanNm), m, src.key)
                 }
             }
         }
@@ -1004,7 +1004,7 @@ object StalkerApi {
             val desc = f["description"] ?: f["plot"] ?: f["storyline"] ?: f["desc"] ?: f["info"]
             if (!desc.isNullOrBlank() || !f["actors"].isNullOrBlank() || !f["director"].isNullOrBlank()) {
                 val sm = toStalkerMeta(src, f, true, Item("stalker:${ref.key}:${ref.id}", Kind.SERIES, "", null, "", null, ""))
-                StalkerMetaCache.put(ref.id, null, null, sm)
+                StalkerMetaCache.put(ref.id, null, null, sm, src.key)
                 break
             }
         }
@@ -1066,16 +1066,25 @@ object StalkerApi {
         val byCmd = ConcurrentHashMap<String, Meta>()
         val byNormTitle = ConcurrentHashMap<String, Meta>()
 
-        fun put(id: String?, cmd: String?, normTitle: String?, meta: Meta) {
+        fun put(id: String?, cmd: String?, normTitle: String?, meta: Meta, srcKey: Any? = null) {
             if (meta.overview.isNullOrBlank() && meta.actors.isEmpty() && meta.director.isNullOrBlank()) return
-            if (!id.isNullOrBlank()) byId[id] = meta
+            val sk = srcKey?.toString()?.takeIf { it.isNotBlank() }
+            if (!id.isNullOrBlank()) {
+                val k = if (sk != null) "$sk:$id" else id
+                byId[k] = meta
+            }
             if (!cmd.isNullOrBlank()) byCmd[cmd] = meta
-            if (!normTitle.isNullOrBlank()) byNormTitle[normTitle] = meta
+            if (!normTitle.isNullOrBlank() && normTitle.length >= 3) {
+                val k = if (sk != null) "$sk:$normTitle" else normTitle
+                byNormTitle[k] = meta
+            }
         }
 
-        fun get(id: String?, cmd: String?, normTitle: String?): Meta? {
+        fun get(id: String?, cmd: String?, normTitle: String?, srcKey: Any? = null): Meta? {
+            val sk = srcKey?.toString()?.takeIf { it.isNotBlank() }
             if (!id.isNullOrBlank()) {
-                val m = byId[id]
+                val k = if (sk != null) "$sk:$id" else id
+                val m = byId[k] ?: byId[id]
                 if (m != null) return m
             }
             if (!cmd.isNullOrBlank()) {
@@ -1083,10 +1092,17 @@ object StalkerApi {
                 if (m != null) return m
             }
             if (!normTitle.isNullOrBlank()) {
-                val m = byNormTitle[normTitle]
+                val k = if (sk != null) "$sk:$normTitle" else normTitle
+                val m = byNormTitle[k] ?: byNormTitle[normTitle]
                 if (m != null) return m
             }
             return null
+        }
+
+        fun clear() {
+            byId.clear()
+            byCmd.clear()
+            byNormTitle.clear()
         }
     }
 
@@ -1118,7 +1134,7 @@ object StalkerApi {
         return t.ifBlank { MatchLogic.searchTitle(title).trim() }
     }
 
-    private fun findMatchingObject(
+    internal fun findMatchingObject(
         arr: JSONArray,
         targetId: String?,
         targetCmd: String?,
@@ -1153,26 +1169,38 @@ object StalkerApi {
             MatchLogic.sameTitle(rawTitle, n)
         }?.let { return it }
 
-        // 4. Normalized containment
+        // 4. Cleaned title match (strips years, languages, 4K tags like "Avatar: Fire and Ash (2024)")
+        val cleanRaw = cleanSearchQuery(rawTitle)
+        if (cleanRaw.isNotEmpty()) {
+            objs.firstOrNull { obj ->
+                val f = fields(obj)
+                val n = f["name"] ?: f["title"] ?: ""
+                val cleanN = cleanSearchQuery(n)
+                MatchLogic.sameTitle(cleanRaw, cleanN)
+            }?.let { return it }
+        }
+
+        // 5. Normalized exact comparison or clear prefix match (minimum 5 chars)
         val normClean = MatchLogic.norm(cleanQ)
-        if (normClean.isNotEmpty()) {
+        val normRaw = MatchLogic.norm(MatchLogic.searchTitle(rawTitle))
+        if (normClean.isNotEmpty() || normRaw.isNotEmpty()) {
             objs.firstOrNull { obj ->
                 val f = fields(obj)
                 val n = f["name"] ?: f["title"] ?: ""
                 val normN = MatchLogic.norm(n)
-                normN == normClean || normN.startsWith(normClean) || normN.contains(normClean) || normClean.contains(normN)
+                if (normN.isEmpty()) return@firstOrNull false
+                if (normN == normClean || normN == normRaw) return@firstOrNull true
+                if ((normClean.length >= 5 && normN.startsWith(normClean)) ||
+                    (normRaw.length >= 5 && normN.startsWith(normRaw)) ||
+                    (normN.length >= 5 && (normClean.startsWith(normN) || normRaw.startsWith(normN)))) {
+                    return@firstOrNull true
+                }
+                false
             }?.let { return it }
         }
 
-        // 5. If small result set, pick the first one with a valid description
-        if (objs.size <= 3) {
-            objs.firstOrNull { obj ->
-                val f = fields(obj)
-                listOf("description", "plot", "descr", "desc", "storyline", "info").any { !f[it].isNullOrBlank() }
-            }?.let { return it }
-        }
-
-        return objs.firstOrNull()
+        // Never return an arbitrary first object if title does not match
+        return null
     }
 
     /**
@@ -1197,36 +1225,30 @@ object StalkerApi {
                 val src = sourceOf(ref.key) ?: return null
 
                 // 1. Fast memory cache
-                StalkerMetaCache.get(ref.id, null, normClean)?.let { return it }
+                StalkerMetaCache.get(ref.id, null, normClean, src.key)?.let { return it }
 
                 val s = login(src)
                 val type = if (ref.mode == "v") "vod" else "series"
                 var matchObj: JSONObject? = null
 
-                // Strategy A: Directly query series seasons/info by movie_id (standard MAG approach, lines 1363-1450 in portalApi.ts)
+                // Strategy A: Directly query series seasons/info by movie_id
                 if (ref.id.isNotBlank()) {
-                    val extra = "&movie_id=${enc(ref.id)}"
-                    val o = js(src, StalkerLogic.api(s.endpoint, type, "get_ordered_list", extra), s.token)
-                    val arr = (o as? JSONObject)?.optJSONArray("data") ?: (o as? JSONArray)
-                    if (arr != null && arr.length() > 0) {
-                        for (i in 0 until arr.length()) {
-                            val obj = arr.optJSONObject(i) ?: continue
-                            val f = fields(obj)
-                            val desc = f["description"] ?: f["plot"] ?: f["storyline"] ?: f["desc"] ?: f["info"]
-                            if (!desc.isNullOrBlank() || !f["actors"].isNullOrBlank() || !f["director"].isNullOrBlank()) {
-                                matchObj = obj
-                                break
-                            }
-                        }
-                        if (matchObj == null) {
-                            matchObj = arr.optJSONObject(0)
+                    val infoExtra = "&series_id=${enc(ref.id)}"
+                    val infoO = js(src, StalkerLogic.api(s.endpoint, type, "get_series_info", infoExtra), s.token)
+                    if (infoO is JSONObject) {
+                        val cand = infoO.optJSONObject("info") ?: infoO
+                        val f = fields(cand)
+                        val desc = f["description"] ?: f["plot"] ?: f["storyline"] ?: f["desc"] ?: f["info"]
+                        if (!desc.isNullOrBlank() || !f["actors"].isNullOrBlank() || !f["director"].isNullOrBlank()) {
+                            matchObj = cand
                         }
                     }
                     if (matchObj == null) {
-                        val infoExtra = "&series_id=${enc(ref.id)}"
-                        val infoO = js(src, StalkerLogic.api(s.endpoint, type, "get_series_info", infoExtra), s.token)
-                        if (infoO is JSONObject) {
-                            matchObj = infoO.optJSONObject("info") ?: infoO
+                        val extra = "&movie_id=${enc(ref.id)}"
+                        val o = js(src, StalkerLogic.api(s.endpoint, type, "get_ordered_list", extra), s.token)
+                        val arr = (o as? JSONObject)?.optJSONArray("data") ?: (o as? JSONArray)
+                        if (arr != null && arr.length() > 0) {
+                            matchObj = findMatchingObject(arr, ref.id, null, item.title, cleanQ)
                         }
                     }
                 }
@@ -1253,7 +1275,7 @@ object StalkerApi {
 
                 val matched = matchObj ?: return null
                 val meta = toStalkerMeta(src, fields(matched), true, item)
-                StalkerMetaCache.put(ref.id, null, normClean, meta)
+                StalkerMetaCache.put(ref.id, null, normClean, meta, src.key)
                 meta
             } else if (item.kind == Kind.MOVIE) {
                 val ref = StalkerLogic.itemRef(url) ?: return null
@@ -1261,7 +1283,7 @@ object StalkerApi {
                 val streamId = extractStreamId(ref.cmd)
 
                 // 1. Fast memory cache
-                StalkerMetaCache.get(streamId, ref.cmd, normClean)?.let { return it }
+                StalkerMetaCache.get(streamId, ref.cmd, normClean, src.key)?.let { return it }
 
                 android.util.Log.i("StalkerMeta", "Movie streamId=$streamId, cleanQ='$cleanQ'")
                 val s = login(src)
@@ -1278,26 +1300,23 @@ object StalkerApi {
                     }
                 }
 
-                // Strategy B: If streamId is known, try movie_id query
+                // Strategy B: If streamId is known, try direct get_info (MAG standard action)
                 if (matchObj == null && streamId != null) {
-                    val extra = "&movie_id=${enc(streamId)}&p=1"
-                    val o = js(src, StalkerLogic.api(s.endpoint, "vod", "get_ordered_list", extra), s.token) as? JSONObject
-                    val arr = o?.optJSONArray("data")
-                    android.util.Log.i("StalkerMeta", "Strategy B arr length=${arr?.length() ?: 0}")
-                    if (arr != null && arr.length() > 0) {
-                        matchObj = findMatchingObject(arr, streamId, ref.cmd, item.title, cleanQ)
-                    }
-                    if (matchObj == null) {
-                        val infoExtra = "&movie_id=${enc(streamId)}"
-                        val infoO = js(src, StalkerLogic.api(s.endpoint, "vod", "get_info", infoExtra), s.token)
-                        android.util.Log.i("StalkerMeta", "Strategy B2 get_info=${infoO != null}")
-                        if (infoO is JSONObject) {
-                            matchObj = infoO.optJSONObject("info") ?: infoO
+                    val infoExtra = "&movie_id=${enc(streamId)}"
+                    val infoO = js(src, StalkerLogic.api(s.endpoint, "vod", "get_info", infoExtra), s.token)
+                    android.util.Log.i("StalkerMeta", "Strategy B get_info=${infoO != null}")
+                    if (infoO is JSONObject) {
+                        val cand = infoO.optJSONObject("info") ?: infoO
+                        val f = fields(cand)
+                        val fid = f["id"] ?: f["movie_id"] ?: f["stream_id"]
+                        val fn = f["name"] ?: f["title"] ?: ""
+                        if (fid == streamId || MatchLogic.sameTitle(item.title, fn) || fn.isNotBlank()) {
+                            matchObj = cand
                         }
                     }
                 }
 
-                // Strategy C: Search by raw searchTitle or first word
+                // Strategy C: Search by raw searchTitle
                 if (matchObj == null) {
                     val qRaw = MatchLogic.searchTitle(item.title).trim()
                     if (qRaw.isNotEmpty() && qRaw != cleanQ) {
@@ -1311,15 +1330,20 @@ object StalkerApi {
                     }
                 }
 
-                // Strategy D: Search by first 1-2 words of title if multi-word
+                // Strategy D: Search by root title (e.g. before ':' or '-') or first 1-2 words
                 if (matchObj == null) {
-                    val words = cleanQ.split(' ').filter { it.isNotBlank() }
-                    if (words.size > 1) {
-                        val firstWord = words.take(2).joinToString(" ")
-                        val extra = "&search=${enc(firstWord)}&p=1"
+                    val root = item.title.substringBefore(':').substringBefore('-').trim()
+                    val searchWord = if (root.isNotEmpty() && root != item.title.trim()) {
+                        cleanSearchQuery(root)
+                    } else {
+                        val words = cleanQ.split(' ').filter { it.isNotBlank() }
+                        if (words.size > 1) words.take(2).joinToString(" ") else ""
+                    }
+                    if (searchWord.isNotEmpty() && searchWord != cleanQ) {
+                        val extra = "&search=${enc(searchWord)}&p=1"
                         val o = js(src, StalkerLogic.api(s.endpoint, "vod", "get_ordered_list", extra), s.token) as? JSONObject
                         val arr = o?.optJSONArray("data")
-                        android.util.Log.i("StalkerMeta", "Strategy D ('$firstWord') arr length=${arr?.length() ?: 0}")
+                        android.util.Log.i("StalkerMeta", "Strategy D ('$searchWord') arr length=${arr?.length() ?: 0}")
                         if (arr != null && arr.length() > 0) {
                             matchObj = findMatchingObject(arr, streamId, ref.cmd, item.title, cleanQ)
                         }
@@ -1328,7 +1352,7 @@ object StalkerApi {
 
                 val matched = matchObj ?: return null
                 val meta = toStalkerMeta(src, fields(matched), false, item)
-                StalkerMetaCache.put(streamId, ref.cmd, normClean, meta)
+                StalkerMetaCache.put(streamId, ref.cmd, normClean, meta, src.key)
                 meta
             } else null
         }.getOrNull()
@@ -1353,7 +1377,13 @@ object StalkerApi {
         ).firstNotNullOfOrNull { k ->
             f[k]?.trim()?.takeIf { it.length >= 4 }?.substring(0, 4)?.takeIf { it.all(Char::isDigit) }
         }
-        val cover = StalkerLogic.cover(src, f) ?: item.logo
+        val candCover = StalkerLogic.cover(src, f)
+        val cover = when {
+            validPoster(item.logo)?.contains("image.tmdb.org") == true -> item.logo
+            validPoster(candCover) != null -> candCover
+            validPoster(item.logo) != null -> item.logo
+            else -> null
+        }
         val genres = listOf("genres_str", "genre_str", "genre", "category_name")
             .firstNotNullOfOrNull { k -> f[k]?.trim()?.takeIf { it.isNotEmpty() } }
             ?.split(',', '/', '|')?.map { it.trim() }?.filter { it.isNotEmpty() }

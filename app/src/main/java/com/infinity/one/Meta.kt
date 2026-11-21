@@ -127,7 +127,8 @@ object MetaRepo {
                     val t = line.indexOf('\t')
                     if (t <= 0) continue
                     val k = line.substring(0, t)
-                    if ((line.contains("q1wkN4VQuBTj1AeyTLLz2w6awMA") || line.contains("Sanju", ignoreCase = true)) && !k.contains("sanju", ignoreCase = true)) {
+                    if ((line.contains("q1wkN4VQuBTj1AeyTLLz2w6awMA") || line.contains("Sanju", ignoreCase = true) || line.contains("Big World", ignoreCase = true) || line.contains("844302")) &&
+                        !k.contains("sanju", ignoreCase = true) && !k.contains("big world", ignoreCase = true)) {
                         dirty = true
                         continue
                     }
@@ -216,14 +217,16 @@ object MetaRepo {
         if (i.kind == Kind.LIVE) return null
         val k = "P|" + key(i)
         provMem[k]?.let {
-            if (it.overview?.contains("Sanju explores", ignoreCase = true) == true && !i.title.contains("sanju", ignoreCase = true)) {
+            if (((it.overview?.contains("Sanju explores", ignoreCase = true) == true || it.overview?.contains("Sanjay Dutt", ignoreCase = true) == true) && !i.title.contains("sanju", ignoreCase = true)) ||
+                ((it.overview?.contains("Big World", ignoreCase = true) == true || it.poster?.contains("844302") == true) && !i.title.contains("big world", ignoreCase = true))) {
                 provMem.remove(k)
             } else if (!it.overview.isNullOrBlank() || it.actors.isNotEmpty() || !it.director.isNullOrBlank()) {
                 return withOmdbTitle(ctx, k, i, it)
             }
         }
         load(ctx, k)?.let {
-            if (it.overview?.contains("Sanju explores", ignoreCase = true) == true && !i.title.contains("sanju", ignoreCase = true)) {
+            if (((it.overview?.contains("Sanju explores", ignoreCase = true) == true || it.overview?.contains("Sanjay Dutt", ignoreCase = true) == true) && !i.title.contains("sanju", ignoreCase = true)) ||
+                ((it.overview?.contains("Big World", ignoreCase = true) == true || it.poster?.contains("844302") == true) && !i.title.contains("big world", ignoreCase = true))) {
                 // skip corrupted
             } else if (!it.overview.isNullOrBlank() || it.actors.isNotEmpty() || !it.director.isNullOrBlank()) {
                 provMem[k] = it
@@ -316,11 +319,15 @@ object MetaRepo {
 
     fun purgeCorruptedCache(c: Context) {
         runCatching {
+            StalkerApi.StalkerMetaCache.clear()
             val d = dir(c)
             d.listFiles()?.forEach { file ->
                 if (file.isFile && file.name != "_slim.idx" && file.name != "_slim.tmp") {
                     val content = file.readText()
-                    if (content.contains("Sanju explores", ignoreCase = true) || content.contains("Sanjay Dutt", ignoreCase = true) ||
+                    if (content.contains("Sanju explores", ignoreCase = true) ||
+                        content.contains("Sanjay Dutt", ignoreCase = true) ||
+                        content.contains("Big World", ignoreCase = true) ||
+                        content.contains("844302") ||
                         (!content.contains("\"overview\"") && !content.contains("\"actors\"") && !content.contains("\"director\""))) {
                         file.delete()
                     }

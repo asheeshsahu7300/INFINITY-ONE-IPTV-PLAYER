@@ -39,7 +39,8 @@ object ProviderInfo {
         val itemRef = StalkerLogic.itemRef(u)
         val streamId = itemRef?.let { StalkerApi.extractStreamId(it.cmd) }
         val normClean = MatchLogic.norm(StalkerApi.cleanSearchQuery(i.title))
-        return StalkerApi.StalkerMetaCache.get(ref?.id ?: streamId, itemRef?.cmd, normClean)
+        val srcKey = ref?.key ?: itemRef?.key
+        return StalkerApi.StalkerMetaCache.get(ref?.id ?: streamId, itemRef?.cmd, normClean, srcKey)
     }
 
     private fun get(url: String): okhttp3.Response? = try {
