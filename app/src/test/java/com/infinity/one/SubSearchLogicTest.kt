@@ -60,7 +60,7 @@ class SubSearchLogicTest {
         val body = """{"status":true,"subtitles":[
           {"release_name":"Show.S01E02","language":"EN","hi":false,"url":"/subtitle/1-2.zip?api_key=secret","episode":2,"full_season":false},
           {"release_name":"Show.S01E03","language":"EN","url":"/subtitle/1-3.zip","episode":3,"full_season":false},
-          {"release_name":"Season pack","language":"EN","url":"/subtitle/1-9.zip","episode":null,"full_season":true},
+          {"release_name":"Season pack","language":"EN","url":"/subtitle/1-9.zip","season":2,"episode":null,"full_season":true},
           {"release_name":"Bad","language":"EN","url":"/../etc/passwd","episode":2}
         ]}"""
         val hits = SubSearchLogic.sdHits(body, episode)

@@ -89,8 +89,8 @@ http://h/x
     }
 
     @Test fun farben_firmenfarbenSindStandard() {
-        assertEquals(Look.BRAND_GREEN, Look.ACCENTS[0].fill)
-        assertEquals(0x0B0F19, Look.BGS[0].bg)
+        assertEquals(Look.BRAND_WHITE, Look.ACCENTS[0].fill)
+        assertEquals(0x000000, Look.BGS[0].bg)
         // Neon green gets dark text, dark surfaces still get white
         assertEquals(ThemeMath.INK, ThemeMath.onAccent(Look.BRAND_GREEN))
         assertEquals(0xFFFFFF, ThemeMath.onAccent(0x7C5CFF))
@@ -129,18 +129,18 @@ http://h/x
     }
 
     // ---------------------------------------------------------------- Menu
-    @Test fun menue_standard() = assertEquals(listOf(0, 3, 1, 2, 10, 6, 7, 8, 9, 4, 5), MenuLogic.parseOrder(null))
+    @Test fun menue_standard() = assertEquals(listOf(0, 3, 1, 2, 6, 7, 9, 4, 5), MenuLogic.parseOrder(null))
 
     @Test fun menue_alteReihenfolge_neueBereicheVorEinstellungen() {
-        assertEquals(listOf(0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 5), MenuLogic.parseOrder("0,1,2,3,4,5"))
-        assertEquals(listOf(6, 7, 8, 9, 10, 5, 0, 1, 2, 3, 4), MenuLogic.parseOrder("5,0,1,2,3,4"))
-        assertEquals(listOf(0, 4, 1, 2, 3, 6, 7, 8, 9, 10, 5), MenuLogic.parseOrder("0,4,1,2,3,6,5"))
+        assertEquals(listOf(0, 1, 2, 3, 4, 6, 7, 9, 5), MenuLogic.parseOrder("0,1,2,3,4,5"))
+        assertEquals(listOf(6, 7, 9, 5, 0, 1, 2, 3, 4), MenuLogic.parseOrder("5,0,1,2,3,4"))
+        assertEquals(listOf(0, 4, 1, 2, 3, 6, 7, 9, 5), MenuLogic.parseOrder("0,4,1,2,3,6,5"))
     }
 
     @Test fun menue_kaputteWerteWerdenRepariert() {
         val o = MenuLogic.parseOrder("11,3,3,x,-1,2")
-        assertEquals(listOf(3, 2, 0, 1, 4, 6, 7, 8, 9, 10, 5), o)
-        assertEquals(MenuLogic.COUNT, o.toSet().size)
+        assertEquals(listOf(3, 2, 0, 1, 4, 6, 7, 9, 5), o)
+        assertEquals(MenuLogic.DEFAULT_ORDER.size, o.toSet().size)
     }
 
     @Test fun menue_startUndEinstellungenBleibenImmerSichtbar() {
@@ -153,7 +153,7 @@ http://h/x
 
     @Test fun menue_verschiebenUndGrenzen() {
         val o = MenuLogic.DEFAULT_ORDER
-        assertEquals(listOf(3, 0, 1, 2, 10, 6, 7, 8, 9, 4, 5), MenuLogic.move(o, 0, 1))
+        assertEquals(listOf(3, 0, 1, 2, 6, 7, 9, 4, 5), MenuLogic.move(o, 0, 1))
         assertEquals(o, MenuLogic.move(o, 0, -1))
         assertEquals(o, MenuLogic.move(o, 5, 1))
         assertEquals(o, MenuLogic.move(o, 99, 1))

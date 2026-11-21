@@ -252,6 +252,7 @@ private fun AppContent() {
 
     // W-004: "What's new" once after an update to a new version
     LaunchedEffect(Unit) { runCatching { WhatsNew.check(ctx) } }
+    LaunchedEffect(Unit) { runCatching { AppUpdate.startCheck(ctx) } }
 
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) { General.cleanupLegacy(ctx) }
@@ -546,6 +547,7 @@ private fun AppContent() {
         if (RemoteUi.show) RemoteOverlay(Modifier.align(Alignment.Center))
         // W-004: not over the player or the add screen
         if (p == null && !adding) WhatsNewHost()
+        if (p == null && !adding) UpdatePromptHost()
         ExternalPlayerHost()
         // Live preview of the View settings: bar at the bottom, the real app stays visible
         if (ViewLive.active) ViewLivePanel(ctx, goTab = { goTab(it) }, closeCats = { cats = null; browse = null }) {

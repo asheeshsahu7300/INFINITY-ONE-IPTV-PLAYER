@@ -14,6 +14,7 @@ class Media3ContractTest {
         assertEquals(PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED, PlaybackErrorCodes.PARSING_CONTAINER_UNSUPPORTED)
         assertEquals(PlaybackException.ERROR_CODE_DECODER_INIT_FAILED, PlaybackErrorCodes.DECODER_INIT_FAILED)
         assertEquals(PlaybackException.ERROR_CODE_DECODING_FAILED, PlaybackErrorCodes.DECODING_FAILED)
+        assertEquals(PlaybackException.ERROR_CODE_DECODING_FORMAT_EXCEEDS_CAPABILITIES, PlaybackErrorCodes.DECODING_FORMAT_EXCEEDS_CAPABILITIES)
         assertEquals(PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED, PlaybackErrorCodes.DECODING_FORMAT_UNSUPPORTED)
     }
 }

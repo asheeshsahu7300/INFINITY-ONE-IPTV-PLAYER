@@ -9,6 +9,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.Request
 import org.json.JSONObject
@@ -246,5 +247,32 @@ object AppUpdate {
                     .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
             )
         }.isSuccess
+    }
+
+    /** Directs the user to the Google Play Store page for updating the app. */
+    fun openPlayStore(c: Context) {
+        val pkg = c.packageName
+        val marketUri = Uri.parse("market://details?id=$pkg")
+        val marketIntent = Intent(Intent.ACTION_VIEW, marketUri).apply {
+            setPackage("com.android.vending")
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        try {
+            c.startActivity(marketIntent)
+        } catch (_: Exception) {
+            val webUri = Uri.parse("https://play.google.com/store/apps/details?id=$pkg")
+            val webIntent = Intent(Intent.ACTION_VIEW, webUri).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            try {
+                c.startActivity(webIntent)
+            } catch (_: Exception) {
+                available?.let { upd ->
+                    kotlinx.coroutines.CoroutineScope(Dispatchers.Main).launch {
+                        downloadAndInstall(c, upd) {}
+                    }
+                }
+            }
+        }
     }
 }

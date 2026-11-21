@@ -166,7 +166,7 @@ fun speedLabel(s: Float): String = when (s) {
 fun isPermanentHttp(status: Int): Boolean = status == 401 || status == 403 || status == 404 || status == 410 || status == 451
 
 /** Understandable error message with a solution hint. Never shows the address of the stream. */
-fun playbackErrorText(code: Int, status: Int, live: Boolean, tls: Boolean = false): String = when {
+fun playbackErrorText(code: Int, status: Int, live: Boolean, tls: Boolean = false, formatDetail: String? = null): String = when {
     tls -> "Das Zertifikat des Anbieters passt nicht zur Server-Adresse. Beim Anbieter nach einer aktuellen Adresse fragen."
     status == 401 || status == 403 -> "Zugang abgelehnt ($status). Benutzername, Passwort oder Abo beim Anbieter prüfen."
     status == 404 || status == 410 -> if (live) "Dieser Sender ist beim Anbieter nicht mehr vorhanden." else "Dieser Titel ist beim Anbieter nicht mehr vorhanden."
@@ -178,7 +178,11 @@ fun playbackErrorText(code: Int, status: Int, live: Boolean, tls: Boolean = fals
         code == PlaybackErrorCodes.IO_NETWORK_CONNECTION_TIMEOUT -> "Keine Verbindung zum Anbieter. Internet und Netzwerk prüfen."
     code == PlaybackErrorCodes.DECODER_INIT_FAILED ||
         code == PlaybackErrorCodes.DECODING_FAILED ||
-        code == PlaybackErrorCodes.DECODING_FORMAT_UNSUPPORTED -> "Dieses Videoformat kann das Gerät nicht abspielen."
+        code == PlaybackErrorCodes.DECODING_FORMAT_EXCEEDS_CAPABILITIES ||
+        code == PlaybackErrorCodes.DECODING_FORMAT_UNSUPPORTED -> {
+            val fmt = if (!formatDetail.isNullOrBlank()) formatDetail else "4K HEVC 10-bit"
+            "Dein Gerät unterstützt das Videoformat $fmt nicht."
+        }
     code == PlaybackErrorCodes.PARSING_CONTAINER_MALFORMED ||
         code == PlaybackErrorCodes.PARSING_MANIFEST_MALFORMED ||
         code == PlaybackErrorCodes.PARSING_CONTAINER_UNSUPPORTED -> "Der Stream ist fehlerhaft oder wird nicht unterstützt."
@@ -197,6 +201,7 @@ internal object PlaybackErrorCodes {
     const val PARSING_CONTAINER_UNSUPPORTED = 3003
     const val DECODER_INIT_FAILED = 4001
     const val DECODING_FAILED = 4003
+    const val DECODING_FORMAT_EXCEEDS_CAPABILITIES = 4004
     const val DECODING_FORMAT_UNSUPPORTED = 4005
 }
 

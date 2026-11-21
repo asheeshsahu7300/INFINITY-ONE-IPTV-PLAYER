@@ -43,7 +43,7 @@ class ProviderLogicTest {
         assertEquals(6.8, ProviderLogic.ratingOf("6,8", null)!!, 0.001)
         assertNull(ProviderLogic.ratingOf("", "0"))
         assertNull(ProviderLogic.ratingOf("N/A", null))
-        assertEquals(10.0, ProviderLogic.ratingOf("55", null)!!, 0.001)
+        assertEquals(5.5, ProviderLogic.ratingOf("55", null)!!, 0.001)
     }
 
     @Test fun laufzeit() {

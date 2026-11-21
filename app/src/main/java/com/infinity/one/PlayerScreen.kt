@@ -86,6 +86,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.media3.common.C
+import androidx.media3.common.Format
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -821,7 +822,11 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
                 if (cur.archive == null && DeadLinkLogic.counts(status, decoder, DeviceCaps.online(ctx))) DeadLinks.fail(ctx, cur.url, DeadLinkLogic.permanent(status))
                 if (switchSource(if (decoder) "Format nicht abspielbar" else "Quelle gestört", sameFirst = !decoder)) { pError = false; msg = null }
                 else if (cur.archive != null) msg = "Diese Sendung ist im Archiv des Anbieters nicht abrufbar.  Zurück = Live-Sender."
-                else { msg = Lang.tr(playbackErrorText(e.errorCode, status, cur.live, TlsFallback.isHostMismatch(e))) + "  " + Lang.tr("Zurück mit der Zurück-Taste."); if (Boomer.enabled) boomerFail = true }
+                else {
+                    val fmt = if (decoder) detectVideoFormat(player, e, cur.title, cur.url) else null
+                    msg = Lang.tr(playbackErrorText(e.errorCode, status, cur.live, TlsFallback.isHostMismatch(e), fmt)) + "  " + Lang.tr("Zurück mit der Zurück-Taste.")
+                    if (Boomer.enabled) boomerFail = true
+                }
             }
             override fun onPlaybackStateChanged(state: Int) {
                 pState = state
@@ -2117,4 +2122,33 @@ internal fun openStream(player: androidx.media3.exoplayer.ExoPlayer, url: String
     false
 } catch (e: Exception) {
     false
+}
+
+/** Detect video format description (e.g. 4K HEVC 10-bit) for clear decoder failure error messages. */
+private fun detectVideoFormat(player: ExoPlayer, e: PlaybackException?, title: String?, url: String?): String {
+    val exo = e as? androidx.media3.exoplayer.ExoPlaybackException
+    val format = exo?.rendererFormat ?: runCatching { player.videoFormat }.getOrNull()
+    val hints = "${title.orEmpty()} ${url.orEmpty()}".uppercase()
+
+    val is4K = (format != null && (format.width >= 3800 || format.height >= 2000)) ||
+        hints.contains("4K") || hints.contains("UHD") || hints.contains("2160")
+
+    val mime = format?.sampleMimeType.orEmpty().lowercase()
+    val codecs = format?.codecs.orEmpty().lowercase()
+    val isHevc = mime.contains("hevc") || mime.contains("h265") ||
+        codecs.contains("hev") || codecs.contains("hvc") ||
+        hints.contains("HEVC") || hints.contains("H265") || hints.contains("H.265")
+    val isAv1 = mime.contains("av01") || codecs.contains("av01") || hints.contains("AV1")
+
+    val colorTransfer = format?.colorInfo?.colorTransfer ?: -1
+    val is10Bit = colorTransfer == C.COLOR_TRANSFER_ST2084 ||
+        colorTransfer == C.COLOR_TRANSFER_HLG ||
+        codecs.contains(".10.") || codecs.contains("l150") || codecs.contains("l153") ||
+        hints.contains("10BIT") || hints.contains("10-BIT") || hints.contains("HDR") ||
+        (is4K && isHevc)
+
+    val res = if (is4K) "4K" else if (format != null && format.width >= 1900) "1080p" else "4K"
+    val codec = if (isHevc) "HEVC" else if (isAv1) "AV1" else if (format != null && format.sampleMimeType?.contains("avc") == true) "H.264" else "HEVC"
+    val depth = if (is10Bit) " 10-bit" else ""
+    return "$res $codec$depth".trim()
 }

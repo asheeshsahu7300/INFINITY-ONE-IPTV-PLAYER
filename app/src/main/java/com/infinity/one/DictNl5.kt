@@ -122,6 +122,8 @@ Die Schnittstelle des Anbieters antwortet nicht wie erwartet.¦De interface van 
 Zugang abgelehnt. Benutzername, Passwort oder Abo prüfen.¦Toegang geweigerd. Controleer gebruikersnaam, wachtwoord of abonnement.
 Der Server hat keine gültige Playlist geliefert.¦De server heeft geen geldige playlist geleverd.
 Update verfügbar: Version {0}¦Update beschikbaar: versie {0}
+Im Google Play Store ist eine neue Version verfügbar. Tippe auf Aktualisieren, um direkt zum Play Store zu wechseln.¦Er is een nieuwe versie beschikbaar in Google Play. Tik op updaten om rechtstreeks naar de Play Store te gaan.
+Im Play Store aktualisieren¦Updaten in Play Store
 Update wird geladen …¦Update wordt geladen …
 Installiert: Version {0}¦Geïnstalleerd: versie {0}
 Automatisch nach Updates suchen¦Automatisch op updates controleren

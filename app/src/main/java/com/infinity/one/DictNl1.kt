@@ -214,6 +214,7 @@ Der Anbieter hat gerade ein Problem ({#0}). Später erneut versuchen.¦De aanbie
 Der Anbieter lehnt die Wiedergabe ab ({#0}).¦De aanbieder weigert het afspelen ({#0}).
 Keine Verbindung zum Anbieter. Internet und Netzwerk prüfen.¦Geen verbinding met de aanbieder. Controleer internet en netwerk.
 Dieses Videoformat kann das Gerät nicht abspielen.¦Dit videoformaat kan het apparaat niet afspelen.
+Dein Gerät unterstützt das Videoformat {0} nicht.¦Je apparaat ondersteunt het videoformaat {0} niet.
 Der Stream ist fehlerhaft oder wird nicht unterstützt.¦De stream is defect of wordt niet ondersteund.
 Wiedergabe nicht möglich.¦Afspelen niet mogelijk.
 Audio & Untertitel¦Audio & ondertitels

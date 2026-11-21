@@ -52,18 +52,13 @@ fun UpdatePromptHost() {
                 // T-015: update.json can mark an update as required. Back still closes the dialog (no lock-out when offline).
                 val required = AppUpdate.isRequired(ctx, upd)
                 if (required) Text("Dieses Update ist erforderlich.", color = Accent2, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-                Text("Deine Playlists und Einstellungen bleiben erhalten. Android fragt vor der Installation einmal nach.", color = Muted, fontSize = 15.sp, lineHeight = 21.sp)
+                Text("Im Google Play Store ist eine neue Version verfügbar. Tippe auf Aktualisieren, um direkt zum Play Store zu wechseln.", color = Muted, fontSize = 15.sp, lineHeight = 21.sp)
                 if (status.isNotBlank()) Text(status, color = Accent2, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    PillButton(if (busy) "Bitte warten …" else "Jetzt aktualisieren", light = true, modifier = Modifier.focusRequester(focus)) {
-                        if (busy) return@PillButton
-                        busy = true
-                        scope.launch {
-                            AppUpdate.downloadAndInstall(ctx, upd) { status = it }
-                            busy = false
-                        }
+                    PillButton(Lang.tr("Im Play Store aktualisieren"), light = true, modifier = Modifier.focusRequester(focus)) {
+                        AppUpdate.openPlayStore(ctx)
                     }
-                    if (!required) PillButton("Später") { if (!busy) AppUpdate.promptDismissed = true }
+                    if (!required) PillButton(Lang.tr("Später")) { if (!busy) AppUpdate.promptDismissed = true }
                 }
             }
         }
