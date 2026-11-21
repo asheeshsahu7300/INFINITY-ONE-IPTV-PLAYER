@@ -776,7 +776,9 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
                     return
                 }
 
-                if (!isPermanentHttp(status) && !decoder) {
+                val isStalker = StalkerLogic.isItem(cur.url)
+                val allowRetry = (!isPermanentHttp(status) || (isStalker && retries < 3) || (liveNow && status == 404 && retries < 2)) && !decoder
+                if (allowRetry) {
                     retries++
                     val backoffMs = if (retries <= 1) 500L
                         else minOf(500L * (1L shl (retries - 1).coerceAtMost(5)), if (liveNow) 20_000L else 8_000L)
