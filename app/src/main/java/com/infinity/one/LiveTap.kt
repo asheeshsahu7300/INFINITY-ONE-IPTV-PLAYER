@@ -208,7 +208,7 @@ class LiveTap(val id: Int, val url: String, private val dir: File, private val m
 object LiveTaps {
     private val taps = HashMap<Int, LiveTap>()
     private var next = 1
-    const val UA = "INFINITYONE/1.0"
+    const val UA = PlaylistStore.UA
 
     @Synchronized fun get(id: Int): LiveTap? = taps[id]?.takeIf { !it.closed }
 

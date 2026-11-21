@@ -229,7 +229,7 @@ object PlaylistStore {
 
     private val XTREAM = Regex("""^(https?://[^/]+)/get\.php\?.*?username=([^&]+).*?password=([^&]+)""")
     // Common player identifier: some providers throttle unknown identifiers heavily (browser/VLC then load much faster)
-    private const val UA = "VLC/3.0.21 LibVLC/3.0.21"
+    const val UA = "VLC/3.0.21 LibVLC/3.0.21"
     /** A fully downloaded but not yet parsed list is reused for this long. */
     private const val RAW_MAX_AGE = 12 * 3_600_000L
     /** Free space that should remain at least after the download. */

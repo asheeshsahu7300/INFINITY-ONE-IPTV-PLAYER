@@ -198,6 +198,7 @@ fun PlayerScreen(req: PlayReq, zapList: List<Item>, liveAll: List<Item>, seriesI
                 .build()
         }
         val http = DefaultHttpDataSource.Factory()
+            .setUserAgent(PlaylistStore.UA)
             .setAllowCrossProtocolRedirects(true)
             .setConnectTimeoutMs(10_000)
             .setReadTimeoutMs(15_000)
