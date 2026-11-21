@@ -110,27 +110,47 @@ object StalkerApi {
     @Volatile private var lastCallTime = 0L
     private const val MIN_CALL_INTERVAL_MS = 250L
 
+    @Volatile private var activeSearchCall: okhttp3.Call? = null
+    private val searchCache = object : java.util.LinkedHashMap<String, List<Item>>(32, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, List<Item>>?): Boolean = size > 60
+    }
+
+    /** Cancel any currently executing remote search request immediately. */
+    fun cancelSearch() {
+        try {
+            activeSearchCall?.cancel()
+            activeSearchCall = null
+        } catch (_: Exception) {}
+    }
+
     /**
      * One request: HTTP code and body. On "429 Too Many Requests" waits as the portal asks (at most a few seconds)
      * and tries once more – portals that limit requests otherwise lock the box out for a while. null = no connection.
      */
-    private fun call(src: StalkerLogic.Source, url: String, token: String?): Pair<Int, String>? {
-        for (round in 0 until 3) {
+    private fun call(src: StalkerLogic.Source, url: String, token: String?, isSearch: Boolean = false): Pair<Int, String>? {
+        val maxRounds = if (isSearch) 1 else 3
+        for (round in 0 until maxRounds) {
             // The request runs under the lock (one at a time, see [callLock]); a play request waits only for the request
             // that is running, because list loading pauses before its next page ([yieldToUrgent]).
             callLock.lock()
+            val okCall = client.newCall(req(src, url, token))
+            if (isSearch) activeSearchCall = okCall
             val res = try {
                 val waitMs = lastCallTime + MIN_CALL_INTERVAL_MS - System.currentTimeMillis()
                 if (waitMs > 0) Thread.sleep(waitMs)
                 lastCallTime = System.currentTimeMillis()
-                client.newCall(req(src, url, token)).execute().use { r ->
+                okCall.execute().use { r ->
                     val wait = if (r.code == 429) (r.header("Retry-After")?.trim()?.toLongOrNull() ?: 2L).coerceIn(1L, 6L) else 0L
                     Triple(r.code, r.body?.string().orEmpty(), wait)
                 }
             } catch (e: Exception) {
+                if (isSearch && (okCall.isCanceled() || (e is java.io.IOException && e.message?.contains("Canceled", ignoreCase = true) == true))) {
+                    return null
+                }
                 android.util.Log.w("StalkerHttp", "call exception: ${e.message}, url=$url")
                 null
             } finally {
+                if (isSearch && activeSearchCall === okCall) activeSearchCall = null
                 callLock.unlock()
             } ?: return null
 
@@ -156,8 +176,8 @@ object StalkerApi {
     private fun authFailed(body: String) = body.contains("Authorization failed", ignoreCase = true)
 
     /** Response as the "js" part, null on error (the reason is then in [note]). */
-    private fun js(src: StalkerLogic.Source, url: String, token: String?): Any? {
-        val (code, body) = call(src, url, token) ?: run { note = "no connection"; return null }
+    private fun js(src: StalkerLogic.Source, url: String, token: String?, isSearch: Boolean = false): Any? {
+        val (code, body) = call(src, url, token, isSearch) ?: run { note = "no connection"; return null }
         if (code !in 200..299) { note = "HTTP $code"; return null }
         if (authFailed(body)) { note = "Authorization failed"; return null }
         val o = jsonOf(body) ?: run { note = "invalid response"; return null }
@@ -563,7 +583,7 @@ object StalkerApi {
 
     private fun searchNow(c: Context, q: String, type: String, check: () -> Unit): List<Item> {
         val cleanQ = q.trim()
-        if (cleanQ.length < 2) return emptyList()
+        if (cleanQ.length < 3) return emptyList()
         val sources = activeSources()
         if (sources.isEmpty()) return emptyList()
 
@@ -571,43 +591,42 @@ object StalkerApi {
         for (src in sources) {
             check()
             yieldToUrgent(check)
+            val cacheKey = "${src.key}:$type:${cleanQ.lowercase()}"
+            val cached = synchronized(searchCache) { searchCache[cacheKey] }
+            if (cached != null) {
+                out.addAll(cached)
+                continue
+            }
+
             val s = runCatching { login(src) }.getOrNull() ?: continue
             val sb = StringBuilder()
             val em = Emitter(src) { sb.append(it).append('\n') }
             val isStalker = isStalkerPortal(src)
             val queryType = if (isStalker && type == "series") "vod" else type
 
-            var lastFirstId: String? = null
-            for (page in 1..2) {
-                check()
-                yieldToUrgent(check)
-                val url = StalkerLogic.searchUrl(s.endpoint, queryType, cleanQ, page)
-                val res = js(src, url, s.token)
-                val data = when (res) {
-                    is JSONObject -> res.optJSONArray("data")
-                    is JSONArray -> res
-                    else -> null
-                } ?: break
-                if (data.length() == 0) break
-                val firstId = data.optJSONObject(0)?.let { it.opt("id")?.toString() ?: it.opt("name")?.toString() }
-                if (firstId != null && firstId == lastFirstId) break
-                lastFirstId = firstId
+            check()
+            yieldToUrgent(check)
+            // Query only page 1: immediate response with top matches in a single request
+            val url = StalkerLogic.searchUrl(s.endpoint, queryType, cleanQ, 1)
+            val res = js(src, url, s.token, isSearch = true)
+            val data = when (res) {
+                is JSONObject -> res.optJSONArray("data")
+                is JSONArray -> res
+                else -> null
+            } ?: continue
+            if (data.length() == 0) continue
 
-                for (i in 0 until data.length()) {
-                    val obj = data.optJSONObject(i) ?: continue
-                    val cid = obj.optString("category_id", "")
-                    val cname = obj.optString("category_name", if (type == "series") "Serien" else "Filme")
-                    em.video(obj, queryType, cid, cname)
-                }
-
-                val per = (res as? JSONObject)?.optInt("max_page_items", data.length()).takeIf { it != null && it > 0 } ?: data.length()
-                val total = (res as? JSONObject)?.optInt("total_items", -1) ?: -1
-                if (data.length() < per || (total > 0 && page * per >= total)) break
-                if (page < 2) Thread.sleep(PAGE_PAUSE_MS)
+            for (i in 0 until data.length()) {
+                val obj = data.optJSONObject(i) ?: continue
+                val cid = obj.optString("category_id", "")
+                val cname = obj.optString("category_name", if (type == "series") "Serien" else "Filme")
+                em.video(obj, queryType, cid, cname)
             }
+
             if (sb.isNotEmpty()) {
                 val parsed = runCatching { M3uParser.parse("#EXTM3U\n$sb") }.getOrDefault(emptyList())
                 if (parsed.isNotEmpty()) {
+                    synchronized(searchCache) { searchCache[cacheKey] = parsed }
                     out.addAll(parsed)
                     runCatching { PlaylistStore.appendItems(c, src.encode(), parsed) }
                 }

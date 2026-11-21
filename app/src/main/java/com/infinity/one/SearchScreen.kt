@@ -135,17 +135,25 @@ fun SearchScreen(
     // A result always belongs to exactly one input: while still searching it says "Searching …" instead of "No hits"
     val found by produceState("" to none, q, index, fl) {
         val idx = index ?: return@produceState
-        if (q.length < 2) { value = q to none; return@produceState }
-        delay(250)
-        // 1. Instant local search across loaded in-memory items
+        if (q.length < 2) {
+            StalkerApi.cancelSearch()
+            value = q to none
+            return@produceState
+        }
+        // 1. Fast debounced local search (150ms) across loaded in-memory items
+        delay(150)
         val local = withContext(Dispatchers.Default) {
             idx.find(q).let { (m, s, l) -> Triple(PlaylistLogic.firstPerKey(m) { it.mk + "|" + it.lang }, s, l) }
         }
         if (local.first.isNotEmpty() || local.second.isNotEmpty() || local.third.isNotEmpty()) {
             value = q to local
         }
-        // 2. If Stalker/MAG portal is active, query remote VOD & Series
-        if (StalkerApi.hasActiveSources()) {
+        // 2. Throttled & debounced remote search for Stalker/MAG portals:
+        // - Minimum 3 characters to avoid heavy server-side full table scans on short fragments
+        // - Additional 350ms delay (500ms total since keystroke) so remote calls only fire when typing pauses
+        if (StalkerApi.hasActiveSources() && q.length >= 3 && (fl == 0 || fl == 1 || fl == 2)) {
+            delay(350)
+            StalkerApi.cancelSearch()
             val (remoteM, remoteS) = withContext(Dispatchers.IO) {
                 coroutineScope {
                     val vodDef: Deferred<List<Item>>? = if (fl == 0 || fl == 1) async {
