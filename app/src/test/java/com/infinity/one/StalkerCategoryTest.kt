@@ -122,4 +122,12 @@ class StalkerCategoryTest {
         val ref = StalkerLogic.itemRef(item.url)!!
         assertEquals("/media/999.mpg", ref.cmd)
     }
+
+    @Test fun searchUrlConstructsCorrectQuery() {
+        val vodUrl = StalkerLogic.searchUrl("http://portal.tld/portal.php", "vod", "Desire", 1)
+        assertEquals("http://portal.tld/portal.php?type=vod&action=get_ordered_list&search=Desire&p=1&JsHttpRequest=1-xml", vodUrl)
+
+        val seriesUrl = StalkerLogic.searchUrl("http://portal.tld/portal.php", "series", "Ring of Desire", 2)
+        assertEquals("http://portal.tld/portal.php?type=series&action=get_ordered_list&search=Ring+of+Desire&p=2&JsHttpRequest=1-xml", seriesUrl)
+    }
 }

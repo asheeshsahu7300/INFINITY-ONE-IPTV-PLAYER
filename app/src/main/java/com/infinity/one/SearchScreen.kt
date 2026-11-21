@@ -37,6 +37,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -127,21 +130,50 @@ fun SearchScreen(
     BackHandler(enabled = inSidebar && tab != 0) { onTab(0) }
 
     val q = SearchState.query.trim()
+    val fl = SearchState.filter
     val none = Triple(emptyList<Item>(), emptyList<Item>(), emptyList<Item>())
     // A result always belongs to exactly one input: while still searching it says "Searching …" instead of "No hits"
-    val found by produceState("" to none, q, index) {
+    val found by produceState("" to none, q, index, fl) {
         val idx = index ?: return@produceState
         if (q.length < 2) { value = q to none; return@produceState }
         delay(250)
-        // Also the de-duplication of movie versions runs here in the background (for short queries it can be tens of
-        // thousands of hits, before it ran on the main thread while typing)
-        value = q to withContext(Dispatchers.Default) {
+        // 1. Instant local search across loaded in-memory items
+        val local = withContext(Dispatchers.Default) {
             idx.find(q).let { (m, s, l) -> Triple(PlaylistLogic.firstPerKey(m) { it.mk + "|" + it.lang }, s, l) }
         }
+        if (local.first.isNotEmpty() || local.second.isNotEmpty() || local.third.isNotEmpty()) {
+            value = q to local
+        }
+        // 2. If Stalker/MAG portal is active, query remote VOD & Series
+        if (StalkerApi.hasActiveSources()) {
+            val (remoteM, remoteS) = withContext(Dispatchers.IO) {
+                coroutineScope {
+                    val vodDef: Deferred<List<Item>>? = if (fl == 0 || fl == 1) async {
+                        runCatching { StalkerApi.search(ctx, q, "vod") }.getOrDefault(emptyList())
+                    } else null
+                    val serDef: Deferred<List<Item>>? = if (fl == 0 || fl == 2) async {
+                        runCatching { StalkerApi.search(ctx, q, "series") }.getOrDefault(emptyList())
+                    } else null
+                    (vodDef?.await() ?: emptyList()) to (serDef?.await() ?: emptyList())
+                }
+            }
+            if (remoteM.isNotEmpty() || remoteS.isNotEmpty()) {
+                val allM = local.first + (remoteM + remoteS).filter { it.kind == Kind.MOVIE }
+                val allS = local.second + (remoteM + remoteS).filter { it.kind == Kind.SERIES }
+                val combM = withContext(Dispatchers.Default) {
+                    PlaylistLogic.firstPerKey(allM) { it.mk + "|" + it.lang }
+                }
+                val combS = withContext(Dispatchers.Default) {
+                    PlaylistLogic.firstPerKey(allS) { it.title.lowercase().trim() }
+                }
+                value = q to Triple(combM, combS, local.third)
+                return@produceState
+            }
+        }
+        value = q to local
     }
     val searching = q.length >= 2 && found.first != q
     val (rm0, rs0, rl0) = if (q.length < 2 || searching) none else found.second
-    val fl = SearchState.filter
     // Word suggestions for the word being typed
     val sugg = remember(SearchState.query, suggestIdx) { suggestIdx?.suggest(WordSuggest.lastWord(SearchState.query)).orEmpty() }
     val rl = if (fl == 0 || fl == 3) rl0 else emptyList()

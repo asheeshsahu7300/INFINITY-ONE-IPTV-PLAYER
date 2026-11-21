@@ -103,6 +103,10 @@ object StalkerLogic {
     fun api(endpoint: String, type: String, action: String, extra: String = ""): String =
         "$endpoint?type=$type&action=$action$extra&JsHttpRequest=1-xml"
 
+    /** Remote VOD & Series search URL for Stalker/MAG portal. */
+    fun searchUrl(endpoint: String, type: String, q: String, page: Int = 1): String =
+        api(endpoint, type, "get_ordered_list", "&search=${enc(q.trim())}&p=$page")
+
     // Requesting a play address ("create_link"): see StalkerLink
 
     /** "ffmpeg http://…" / "ffrt http://…" / "auto http://…" → bare address. */

@@ -1,8 +1,10 @@
 package com.infinity.one
 
 import android.content.Context
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -530,6 +532,89 @@ object StalkerApi {
 
     private fun sourceOf(key: Int): StalkerLogic.Source? =
         PlaylistStore.lists.asSequence().mapNotNull { StalkerLogic.parse(it.url) }.firstOrNull { it.key == key }
+
+    /** Returns true if there is at least one active or configured Stalker portal. */
+    fun hasActiveSources(): Boolean =
+        PlaylistStore.lists.any { StalkerLogic.isSource(it.url) } ||
+        (PlaylistStore.shownUrl?.let { StalkerLogic.isSource(it) } == true)
+
+    /** Returns all active Stalker sources (from shown playlists or active primary playlist). */
+    fun activeSources(): List<StalkerLogic.Source> {
+        val fromLists = PlaylistStore.lists.asSequence()
+            .filterIndexed { i, _ -> PlaylistStore.isShown(i) }
+            .mapNotNull { StalkerLogic.parse(it.url) }
+        val fromPrimary = sequenceOf(PlaylistStore.shownUrl?.let { StalkerLogic.parse(it) }).filterNotNull()
+        val all = (fromLists + fromPrimary).distinctBy { it.key }.toList()
+        if (all.isNotEmpty()) return all
+        return PlaylistStore.lists.asSequence().mapNotNull { StalkerLogic.parse(it.url) }.distinctBy { it.key }.toList()
+    }
+
+    /**
+     * Remote search on active Stalker/MAG portals for VOD or Series.
+     * Uses [StalkerLogic.searchUrl] (`type=$type&action=get_ordered_list&search=$q&p=1`).
+     */
+    suspend fun search(c: Context, q: String, type: String): List<Item> = withContext(Dispatchers.IO) {
+        urgent {
+            searchNow(c, q, type) {
+                if (!isActive) throw CancellationException()
+            }
+        }
+    }
+
+    private fun searchNow(c: Context, q: String, type: String, check: () -> Unit): List<Item> {
+        val cleanQ = q.trim()
+        if (cleanQ.length < 2) return emptyList()
+        val sources = activeSources()
+        if (sources.isEmpty()) return emptyList()
+
+        val out = ArrayList<Item>()
+        for (src in sources) {
+            check()
+            yieldToUrgent(check)
+            val s = runCatching { login(src) }.getOrNull() ?: continue
+            val sb = StringBuilder()
+            val em = Emitter(src) { sb.append(it).append('\n') }
+            val isStalker = isStalkerPortal(src)
+            val queryType = if (isStalker && type == "series") "vod" else type
+
+            var lastFirstId: String? = null
+            for (page in 1..2) {
+                check()
+                yieldToUrgent(check)
+                val url = StalkerLogic.searchUrl(s.endpoint, queryType, cleanQ, page)
+                val res = js(src, url, s.token)
+                val data = when (res) {
+                    is JSONObject -> res.optJSONArray("data")
+                    is JSONArray -> res
+                    else -> null
+                } ?: break
+                if (data.length() == 0) break
+                val firstId = data.optJSONObject(0)?.let { it.opt("id")?.toString() ?: it.opt("name")?.toString() }
+                if (firstId != null && firstId == lastFirstId) break
+                lastFirstId = firstId
+
+                for (i in 0 until data.length()) {
+                    val obj = data.optJSONObject(i) ?: continue
+                    val cid = obj.optString("category_id", "")
+                    val cname = obj.optString("category_name", if (type == "series") "Serien" else "Filme")
+                    em.video(obj, queryType, cid, cname)
+                }
+
+                val per = (res as? JSONObject)?.optInt("max_page_items", data.length()).takeIf { it != null && it > 0 } ?: data.length()
+                val total = (res as? JSONObject)?.optInt("total_items", -1) ?: -1
+                if (data.length() < per || (total > 0 && page * per >= total)) break
+                if (page < 2) Thread.sleep(PAGE_PAUSE_MS)
+            }
+            if (sb.isNotEmpty()) {
+                val parsed = runCatching { M3uParser.parse("#EXTM3U\n$sb") }.getOrDefault(emptyList())
+                if (parsed.isNotEmpty()) {
+                    out.addAll(parsed)
+                    runCatching { PlaylistStore.appendItems(c, src.encode(), parsed) }
+                }
+            }
+        }
+        return out
+    }
 
     /**
      * Play command of the first file of a movie/episode with its own files ("/media/file_<file ID>.mpg"), as the MAG box
