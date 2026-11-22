@@ -591,7 +591,17 @@ fun HomeScreen(
     val watchK = remember(watchHome, vodKind) { watchHome.filter { it.kind == vodKind } }
     val histK = remember(histHome, vodKind) { histHome.filter { it.kind == vodKind } }
     val trendK = remember(trendItems, vodKind) { trendItems.filter { it.kind == vodKind } }
-    val reload: () -> Unit = { PlaylistStore.savedUrl(ctx)?.let { u -> scope.launch { PlaylistStore.load(ctx, u, false) } } }
+    val reload: () -> Unit = {
+        PlaylistStore.savedUrl(ctx)?.let { u ->
+            scope.launch {
+                val ok = PlaylistStore.load(ctx, u, save = false, skipNetworkWhenCached = false, forceNetwork = true)
+                withContext(Dispatchers.Main) {
+                    val msg = if (ok) Lang.tr("Playlist erfolgreich aktualisiert") else (PlaylistStore.error ?: Lang.tr("Fehler beim Aktualisieren"))
+                    android.widget.Toast.makeText(ctx, msg, android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
 
     // Round 17b (Cinematic Remake): background and info follow the selected title once the big picture has scrolled away
     val bbTab = tab in 0..2

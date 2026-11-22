@@ -1083,7 +1083,7 @@ private fun DiagPage(ctx: Context, reload: () -> Unit) {
     Hint("Der Bericht enthält keine Adressen, Benutzernamen oder Passwörter. Er wird nur in die Zwischenablage kopiert und nirgendwohin gesendet.")
     Hint("Auf dem Fernseher lässt sich die Zwischenablage oft nicht nutzen: Unter Einstellungen > Speicher > „Übertragung im WLAN starten“ kannst du den Bericht am Handy öffnen (Seite „Letzten Absturzbericht anzeigen“) und dort kopieren.")
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        PillButton("Playlist neu laden", light = true, icon = AIcon.Refresh) { reload() }
+        PillButton(if (PlaylistStore.loading) "Lade…" else "Playlist neu laden", light = true, icon = AIcon.Refresh) { if (!PlaylistStore.loading) reload() }
         PillButton("Bericht kopieren") {
             val speedExtra = if (SpeedTestManager.state == SpeedTestManager.State.DONE) {
                 "\nSpeedtest: ${"%.1f".format(java.util.Locale.US, SpeedTestManager.speedMbps)} Mbps (Ping ${SpeedTestManager.pingMs} ms, Jitter ${SpeedTestManager.jitterMs} ms)"
@@ -1563,12 +1563,12 @@ private fun PlaylistPage(ctx: Context, onAdd: () -> Unit, reload: () -> Unit) {
     if (isPhonePortrait) {
         Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             PillButton("+ " + Lang.tr("Weitere Playlist hinzufügen"), light = true, modifier = Modifier.fillMaxWidth()) { onAdd() }
-            PillButton(Lang.tr("Aktive Playlist neu laden"), icon = AIcon.Refresh, modifier = Modifier.fillMaxWidth()) { reload() }
+            PillButton(if (PlaylistStore.loading) Lang.tr("Lade…") else Lang.tr("Aktive Playlist neu laden"), icon = AIcon.Refresh, modifier = Modifier.fillMaxWidth()) { if (!PlaylistStore.loading) reload() }
         }
     } else {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             PillButton("+ Weitere Playlist hinzufügen", light = true) { onAdd() }
-            PillButton("Aktive Playlist neu laden", icon = AIcon.Refresh) { reload() }
+            PillButton(if (PlaylistStore.loading) "Lade…" else "Aktive Playlist neu laden", icon = AIcon.Refresh) { if (!PlaylistStore.loading) reload() }
         }
     }
     LanguageFilterSection(ctx)

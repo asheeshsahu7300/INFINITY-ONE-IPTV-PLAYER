@@ -274,6 +274,7 @@ object PlaylistStore {
         askRequested = false
         langAsk?.choose(null)
         runCatching { call?.cancel() }
+        StalkerApi.cancelAll()
         job?.cancel()
     }
 
@@ -286,9 +287,23 @@ object PlaylistStore {
         inited = true
         cleanupStale(c)
         val p = prefs(c)
-        // Prefers the encrypted version; the old plain-text version is adopted and replaced on first start.
+        // Prefers the encrypted version; safe fallback or plaintext adopted on recovery
         val enc = p.getString("lists_enc", null)
-        val json = (if (enc != null) Secrets.decrypt(enc) else null) ?: p.getString("lists", "[]")
+        var json: String? = null
+        if (enc != null) {
+            json = Secrets.decrypt(enc)
+            if (json == null) {
+                Thread.sleep(50)
+                json = Secrets.decrypt(enc)
+            }
+            if (json == null) {
+                val safe = p.getString("lists_safe", null)
+                if (safe != null) json = SafeStore.deobfuscate(safe)
+            }
+        }
+        if (json == null) {
+            json = p.getString("lists", "[]")
+        }
         try {
             val a = JSONArray(json)
             for (i in 0 until a.length()) {
@@ -320,9 +335,15 @@ object PlaylistStore {
         val a = JSONArray()
         for (l in lists) a.put(JSONObject().put("name", l.name).put("url", l.url))
         val e = prefs(c).edit().putInt("active", active).putString("multi", MultiLogic.encodeKeys(multi)).remove("url")
-        val token = Secrets.encrypt(a.toString())
-        if (token != null) e.putString("lists_enc", token).remove("lists")
-        else e.putString("lists", a.toString()).remove("lists_enc")
+        val jsonStr = a.toString()
+        val token = Secrets.encrypt(jsonStr)
+        if (token != null) {
+            e.putString("lists_enc", token)
+            e.putString("lists_safe", SafeStore.obfuscate(jsonStr))
+            e.remove("lists")
+        } else {
+            e.putString("lists", jsonStr).remove("lists_enc").remove("lists_safe")
+        }
         e.apply()
     }
 
@@ -394,7 +415,15 @@ object PlaylistStore {
         } catch (e: Exception) { "Playlist" }
     }
 
-    fun savedUrl(c: Context): String? { ensure(c); return lists.getOrNull(active)?.url }
+    fun savedUrl(c: Context): String? {
+        ensure(c)
+        if (lists.isEmpty()) return null
+        val cur = lists.getOrNull(active)?.url
+        if (cur != null) return cur
+        active = 0
+        persist(c)
+        return lists.firstOrNull()?.url
+    }
 
     /** Xtream address (user and password URL-encoded) or null if a value is missing or invalid. */
     fun xtreamUrl(host: String, user: String, pass: String): String? = PlaylistLogic.xtreamUrl(host, user, pass)
@@ -480,16 +509,27 @@ object PlaylistStore {
     fun remove(c: Context, i: Int) {
         ensure(c)
         if (i !in lists.indices) return
-        deleteFiles(c, lists[i].url)
-        prefs(c).edit().remove(backupKey(lists[i].url)).apply()
-        if (adding == lists[i].url) adding = null
-        extras.remove(lists[i].url)
-        multi = multi - key(lists[i].url)
+        val removedUrl = lists[i].url
+        cancel()
+        deleteFiles(c, removedUrl)
+        prefs(c).edit().remove(backupKey(removedUrl)).apply()
+        if (adding == removedUrl) adding = null
+        extras.remove(removedUrl)
+        multi = multi - key(removedUrl)
         lists.removeAt(i)
         active = active.coerceIn(0, maxOf(lists.size - 1, 0))
         persist(c)
         syncFailover(c)
-        if (lists.isEmpty()) setItems(emptyList())
+        clearPending(c)
+        StalkerLogic.parse(removedUrl)?.let { StalkerApi.reset(it.key) }
+        if (lists.isEmpty()) {
+            StalkerApi.reset()
+            primaryUrl = null
+            primaryItems = emptyList()
+            setItems(emptyList())
+            loading = false
+            error = null
+        }
     }
 
     private fun fetchOrder(url: String): Map<String, Int> {
@@ -1203,15 +1243,22 @@ object PlaylistStore {
 
     /**
      * Loads a playlist. [save] = newly added (only adopted into the list on success, but remembered beforehand),
-     * [ask] = may ask for languages on very large lists (not in the background), [resumed] = continued automatically.
+     * [ask] = may ask for languages on very large lists (not in the background), [resumed] = continued automatically,
+     * [forceNetwork] = force network refresh bypassing cached files (e.g. from reload button or add playlist).
      */
     suspend fun load(
         c: Context, url: String, save: Boolean, skipNetworkWhenCached: Boolean = false,
-        ask: Boolean = true, resumed: Boolean = false
+        ask: Boolean = true, resumed: Boolean = false, forceNetwork: Boolean = false
     ): Boolean {
+        if (save || forceNetwork) {
+            if (loadLock.isLocked) {
+                cancel()
+                withTimeoutOrNull(4000L) { while (loadLock.isLocked) delay(50) }
+            }
+        }
         if (!loadLock.tryLock()) return rawChannels.isNotEmpty()
         try {
-            return loadInner(c, url, save, skipNetworkWhenCached, ask, resumed)
+            return loadInner(c, url, save, skipNetworkWhenCached, ask, resumed, forceNetwork)
         } finally {
             loading = false   // also on cancel: otherwise the loading state (and the screen keep-awake) would stay stuck
             heavy = false
@@ -1223,7 +1270,10 @@ object PlaylistStore {
         }
     }
 
-    private suspend fun loadInner(c: Context, url: String, save: Boolean, skipNetworkWhenCached: Boolean, ask: Boolean, resumed: Boolean): Boolean {
+    private suspend fun loadInner(
+        c: Context, url: String, save: Boolean, skipNetworkWhenCached: Boolean,
+        ask: Boolean, resumed: Boolean, forceNetwork: Boolean = false
+    ): Boolean {
         ensure(c)
         val u = PlaylistLogic.normalizeUrl(url) ?: run { error = "Bitte eine gültige Adresse eingeben (beginnt mit http:// oder https://)."; return false }
         job = currentCoroutineContext()[Job]
@@ -1238,15 +1288,21 @@ object PlaylistStore {
         }
         if (askNext && ask) forceAsk = true
         var usedCache = false
-        if (rawChannels.isEmpty()) {
+        if (!forceNetwork && rawChannels.isEmpty()) {
             val r = withContext(Dispatchers.IO) { fromLocal(c, u, allowGz = skipNetworkWhenCached, ask = ask) }
             usedCache = r == Local.OK
         }
         // Take further simultaneously shown playlists straight from the cache (fast start)
         if (usedCache) withContext(Dispatchers.IO) { runCatching { loadExtras(c, network = false) }.onFailure { if (it is CancellationException) throw it } }
-        if (usedCache && skipNetworkWhenCached) {
+        if (!forceNetwork && usedCache && skipNetworkWhenCached) {
             if (save) finishSave(c, u)
             return true
+        }
+        if (forceNetwork) {
+            rawFile(c, u).delete()
+            infoFile(c, u).delete()
+            partFile(c, u).delete()
+            StalkerLogic.parse(u)?.let { StalkerApi.reset(it.key) }
         }
         error = null
         val before = sig(primaryItems)
@@ -1268,7 +1324,7 @@ object PlaylistStore {
                 Catchup.saveParsed(c, u, parsed.catchup)
                 commitGz(c, u, gzTmp)
                 val list = parsed.items
-                if (sig(list) != before || !usedCache || b.hidden != shownHidden) show(c, u, list, urls, order, parsed.counts, parsed.bytes, b.hidden)
+                if (forceNetwork || sig(list) != before || !usedCache || b.hidden != shownHidden) show(c, u, list, urls, order, parsed.counts, parsed.bytes, b.hidden)
                 else { primaryEpg = urls; primaryOrder = order; langCounts = parsed.counts; langBytes = parsed.bytes; restartCatchup(c) }
                 // Renew further shown playlists from the server as well
                 loadExtras(c, network = true)
@@ -1284,13 +1340,13 @@ object PlaylistStore {
                 if (cancelled()) { if (save) failPending(c, MSG_CANCEL); throw CancellationException("abgebrochen") }
                 val msg = if (e is ParseStop) MSG_TOO_BIG else PlaylistLogic.friendlyError(e)
                 if (e is ParseStop) askNext = true
-                if (rawChannels.isEmpty() || save) error = msg
+                if (rawChannels.isEmpty() || save || forceNetwork) error = msg
                 if (save) failPending(c, msg)
                 usedCache
             } catch (e: OutOfMemoryError) {
                 askNext = true
                 if (save) failPending(c, MSG_TOO_BIG)
-                if (rawChannels.isEmpty() || save) error = MSG_TOO_BIG
+                if (rawChannels.isEmpty() || save || forceNetwork) error = MSG_TOO_BIG
                 usedCache
             }
         }

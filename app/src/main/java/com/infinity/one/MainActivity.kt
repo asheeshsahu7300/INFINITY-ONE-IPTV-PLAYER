@@ -227,7 +227,8 @@ private fun AppContent() {
     }
     // Interrupted in the middle of adding last time (crash, power loss): the add screen automatically continues loading
     val resumeAdd = remember { PlaylistStore.pending(ctx)?.autoResume == true }
-    var adding by remember { mutableStateOf(PlaylistStore.savedUrl(ctx) == null || resumeAdd) }
+    val hasSavedList = remember { PlaylistStore.savedUrl(ctx) != null }
+    var adding by remember { mutableStateOf(!hasSavedList || (resumeAdd && !hasSavedList)) }
     // Top detail page (Item or PersonRef) plus back stack, so Back retraces Movie → Person → Movie
     var top by remember { mutableStateOf<Any?>(null) }
     val trail = remember { mutableStateListOf<Any>() }
@@ -256,8 +257,9 @@ private fun AppContent() {
 
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) { General.cleanupLegacy(ctx) }
-        if (resumeAdd) return@LaunchedEffect
-        PlaylistStore.savedUrl(ctx)?.let { u ->
+        val saved = PlaylistStore.savedUrl(ctx)
+        if (resumeAdd && saved == null) return@LaunchedEffect
+        saved?.let { u ->
             val due = SettingsLogic.refreshDue(General.plan(), General.lastRefresh, System.currentTimeMillis(), General.zone())
             // 1. FAST START: Always load from local cache first so app opens in < 1 second with no freeze
             val loadedFromCache = PlaylistStore.load(ctx, u, false, skipNetworkWhenCached = true)
