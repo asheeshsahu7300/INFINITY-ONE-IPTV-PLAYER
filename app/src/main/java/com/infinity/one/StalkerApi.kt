@@ -111,6 +111,7 @@ object StalkerApi {
     private const val MIN_CALL_INTERVAL_MS = 250L
 
     @Volatile private var activeSearchCall: okhttp3.Call? = null
+    @Volatile private var activeCall: okhttp3.Call? = null
     private val searchCache = object : java.util.LinkedHashMap<String, List<Item>>(32, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, List<Item>>?): Boolean = size > 60
     }
@@ -121,6 +122,28 @@ object StalkerApi {
             activeSearchCall?.cancel()
             activeSearchCall = null
         } catch (_: Exception) {}
+    }
+
+    /** Cancel any currently executing Stalker network requests (loading, search, etc.) immediately. */
+    fun cancelAll() {
+        cancelSearch()
+        try {
+            activeCall?.cancel()
+            activeCall = null
+        } catch (_: Exception) {}
+    }
+
+    /** Invalidate cached sessions and remembered endpoints. */
+    fun reset(srcKey: Int? = null) {
+        synchronized(sessions) {
+            if (srcKey == null) {
+                sessions.clear()
+                knownEndpoint.clear()
+            } else {
+                sessions.remove(srcKey)
+                knownEndpoint.remove(srcKey)
+            }
+        }
     }
 
     /**
@@ -134,7 +157,7 @@ object StalkerApi {
             // that is running, because list loading pauses before its next page ([yieldToUrgent]).
             callLock.lock()
             val okCall = client.newCall(req(src, url, token))
-            if (isSearch) activeSearchCall = okCall
+            if (isSearch) activeSearchCall = okCall else activeCall = okCall
             val res = try {
                 val waitMs = lastCallTime + MIN_CALL_INTERVAL_MS - System.currentTimeMillis()
                 if (waitMs > 0) Thread.sleep(waitMs)
@@ -144,13 +167,14 @@ object StalkerApi {
                     Triple(r.code, r.body?.string().orEmpty(), wait)
                 }
             } catch (e: Exception) {
-                if (isSearch && (okCall.isCanceled() || (e is java.io.IOException && e.message?.contains("Canceled", ignoreCase = true) == true))) {
+                if (okCall.isCanceled() || (e is java.io.IOException && e.message?.contains("Canceled", ignoreCase = true) == true)) {
                     return null
                 }
                 android.util.Log.w("StalkerHttp", "call exception: ${e.message}, url=$url")
                 null
             } finally {
                 if (isSearch && activeSearchCall === okCall) activeSearchCall = null
+                if (!isSearch && activeCall === okCall) activeCall = null
                 callLock.unlock()
             } ?: return null
 

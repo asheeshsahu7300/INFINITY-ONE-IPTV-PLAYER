@@ -125,7 +125,7 @@ fun AddPlaylistScreen(onDone: () -> Unit) {
     LaunchedEffect(Unit) {
         val p = pend ?: return@LaunchedEffect
         when {
-            p.autoResume && !PlaylistStore.loading -> { if (PlaylistStore.load(ctx, p.url, true, resumed = true)) onDone() }
+            PlaylistStore.lists.isEmpty() && p.autoResume && !PlaylistStore.loading -> { if (PlaylistStore.load(ctx, p.url, true, resumed = true, forceNetwork = true)) onDone() }
             p.interrupted -> PlaylistStore.error = "Das Laden wurde mehrmals unterbrochen. Deine Angaben sind gespeichert – drücke „Hinzufügen“, um es erneut zu versuchen."
             p.msg != null -> PlaylistStore.error = p.msg
         }
@@ -244,7 +244,7 @@ fun AddPlaylistScreen(onDone: () -> Unit) {
                         else if (xtream && !stalker && !backupsValid(backups)) PlaylistStore.error = BACKUP_INVALID
                         else {
                             if (xtream && !stalker) PlaylistStore.setBackups(ctx, finalUrl, backups.toList())
-                            scope.launch { if (PlaylistStore.load(ctx, finalUrl, true)) onDone() }
+                            scope.launch { if (PlaylistStore.load(ctx, finalUrl, save = true, forceNetwork = true)) onDone() }
                         }
                     }
                     if (canCancel) FocusButton("Abbrechen", Modifier.fillMaxWidth(), compact = false) { PlaylistStore.clearPending(ctx); onDone() }
@@ -259,7 +259,7 @@ fun AddPlaylistScreen(onDone: () -> Unit) {
                         else if (xtream && !stalker && !backupsValid(backups)) PlaylistStore.error = BACKUP_INVALID
                         else {
                             if (xtream && !stalker) PlaylistStore.setBackups(ctx, finalUrl, backups.toList())
-                            scope.launch { if (PlaylistStore.load(ctx, finalUrl, true)) onDone() }
+                            scope.launch { if (PlaylistStore.load(ctx, finalUrl, save = true, forceNetwork = true)) onDone() }
                         }
                     }
                     if (canCancel) FocusButton("Abbrechen", compact = true) { PlaylistStore.clearPending(ctx); onDone() }
